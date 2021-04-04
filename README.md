@@ -17,7 +17,7 @@ or [lflare's Go client](https://github.com/lflare/mdathome-golang).
 
 Submitting Issues and Pull Requests is absolutely encouraged. Issues may contain feature requests
 and PRs may contain feature implementations. For both, please document the full intention of the
-feature at hand. Please note: Not all reqeusts may be accepted, and it is ultimately up the author
+feature at hand. Please note: Not all requests may be accepted, and it is ultimately up the author
 to accept or decline a feature request.
 
 ## Why "Scalpel"

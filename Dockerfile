@@ -17,12 +17,12 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
 RUN curl https://apt.llvm.org/llvm.sh | bash
 
 # copy and build
-COPY Cargo.toml Cargo.lock .
+COPY Cargo.toml Cargo.lock ./
 COPY src src
 RUN cargo build --release
 
 # convert docker entrypoint to LF
-COPY docker-entrypoint.sh .
+COPY docker-entrypoint.sh ./
 RUN dos2unix docker-entrypoint.sh
 
 
@@ -30,9 +30,9 @@ RUN dos2unix docker-entrypoint.sh
 FROM debian:latest
 WORKDIR /mangahome
 
-COPY --from=build-stage /build/target/release/scalpel .
+COPY --from=build-stage /build/target/release/scalpel ./
 RUN chmod +x scalpel
-COPY --from=build-stage /build/docker-entrypoint.sh .
+COPY --from=build-stage /build/docker-entrypoint.sh ./
 
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["./docker-entrypoint.sh"]

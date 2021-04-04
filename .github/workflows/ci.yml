@@ -1,0 +1,71 @@
+on: [push]
+
+name: ci
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: install rust
+              uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: stable
+                  profile: minimal
+
+            - name: cache LLVM
+              id: cache-llvm
+              uses: actions/cache@v2
+              with:
+                  path: ${{ runner.temp }}/llvm
+                  key: llvm-10
+
+            - name: install LLVM
+              uses: KyleMayes/install-llvm-action@v1
+              with:
+                  version: "10.0"
+                  directory: ${{ runner.temp }}/llvm
+                  cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+            
+            - run: cargo test
+
+    build:
+        name: build-ubuntu
+        needs: test
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: install rust
+              uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: stable
+                  profile: minimal
+
+            - name: cache LLVM
+              id: cache-llvm
+              uses: actions/cache@v2
+              with:
+                  path: ${{ runner.temp }}/llvm
+                  key: llvm-11
+
+            - name: install LLVM
+              uses: KyleMayes/install-llvm-action@v1
+              with:
+                  version: "11.1"
+                  directory: ${{ runner.temp }}/llvm
+                  cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+
+            - run: cargo build --release
+              env:
+                LLVM_CONFIG_PATH: ${{ runner.temp }}/llvm/bin/llvm-config
+
+            - uses: actions/upload-artifact@v2
+              with:
+                  name: scalpel-${{ matrix.os }}
+                  path: target/release/scalpel*
+
+# TODO: Add build for windows systems
+# Unfortunately, this isn't easy because LLVM for windows doesn't come with `llvm-config`, which is required
+# to build RocksDB. So, we'll need to eventually build LLVM ourselves and cache it.

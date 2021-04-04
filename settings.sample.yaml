@@ -1,0 +1,84 @@
+### CLIENT CONFIGURATION ###
+
+# Self explanatory
+client_secret: "YOUR CLIENT SECRET"
+
+# The max number of seconds that the graceful shutdown is allowed to take.
+# 0 would mean that graceful shutdown will take as long as it wants
+max_grace_period: 60
+
+
+### CACHE CONFIGURATION ###
+
+# The maximum size allocated for cache on your disk
+# The minimum is 40GiB (40960), otherwise program will panic
+cache_size_mebibytes: 40960
+
+# Only "rocksdb" for now, in the future will include other engines
+cache_engine: rocksdb
+
+# Configuration for "rocksdb" cache engine. Only required if engine is rocksdb
+rocksdb_options:
+    # Self explanatory
+    path: ./cache
+    # The number of threads that RocksDB will use in the background for flushing and compaction
+    # It is recommended to set this to the number of system threads you have
+    parallelism: 4
+    # This will compress database files on disk and will lead to a smaller database. However, it
+    # will use more CPU when performing writes.
+    zstd_compression: true
+    # This will optimize compactions on the database. It is recommended to keep this on unless
+    # you have a low memory machine. If you do have a low memory machine, do some testing.
+    optimize_compaction: true
+    # The rate limit of writing to the disk in mebibytes/s. This will smooth out disk writes but will
+    # use up more RAM in the process.
+    # 0 will disable the rate limiter (so IOs won't be smoothed out)
+    write_rate_limit: 0
+    # The in-memory write buffer size in mebibytes. Increasing this will generally increase performance
+    # of bulk writes with the cost of using more RAM. (128MiB = ~1GB of RAM at peak)
+    write_buffer_size: 128
+
+
+
+### HTTP CONFIGURATION ###
+
+# Port and IP Address to bind the webserver to
+# Keep 'bind_address' 0.0.0.0 unless you know what you're doing
+port: 443
+bind_address: 0.0.0.0
+
+# The number of worker threads the webserver create
+# Uncomment to enable, otherwise the number of logical cores your CPU has will be used
+#worker_threads: 18
+
+# Compress images sent to client using the gzip algorithm (only applies to cache HITs)
+# Enabling this might increase download speed slightly but will affect CPU perf and TTFB
+gzip_compress: false
+
+# The number of seconds the server should keep keep-alive connections for
+# before forcefully closing them
+keep_alive: 30
+
+# Enabling this feature will enforce TLS1.2+ for SSL. On one hand, the TLS1 and 1.1 protos are
+# insecure and obsolete, but on the other hand some MD users still use old technology.
+#
+# > "All the chumps [use old TLS] on shitty older apple stuff, clinging to it like it was
+# > the last birthday present they were giving by steve jobs himself" - Ai 2021
+#
+# Just to clarify: Enabling this will cause higher failure rates for your client
+enforce_secure_tls: false
+
+
+### PING/EXTERNAL CONFIGURATION ###
+
+# An IPv4 address sent to the backend that represents this client. Only enable this if you have to.
+# Uncomment to enable
+#external_ip: CHANGEME
+
+# The port on your IP Address that the backend will send all requests to.
+# Uncomment to enable, otherwise it will default to 'port'
+#external_port: 8080
+
+# Maximum network speed of your server in kilobits per second
+# Uncomment to enable, otherwise the limiter is off
+#external_max_speed: 50000

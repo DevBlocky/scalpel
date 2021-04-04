@@ -84,7 +84,9 @@ impl RocksCache {
             /* tune compactions */
             db_opts.set_compaction_style(rocksdb::DBCompactionStyle::Level);
             db_opts.set_compaction_readahead_size(8 * Self::MEBIBYTE); // 8MiB, docs say recommended for HDDs
-            db_opts.optimize_level_style_compaction(512 * Self::MEBIBYTE); // No clue what this does, but it's recommended for large datasets
+            if cfg.optimize_compaction {
+                db_opts.optimize_level_style_compaction(512 * Self::MEBIBYTE); // No clue what this does, but it's recommended for large datasets
+            }
 
             /* tune writes */
             if cfg.write_rate_limit > 0 {

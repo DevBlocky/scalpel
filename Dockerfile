@@ -31,8 +31,8 @@ FROM debian:latest
 WORKDIR /mangahome
 
 COPY --from=build-stage /build/target/release/scalpel ./
-RUN chmod +x scalpel
 COPY --from=build-stage /build/docker-entrypoint.sh ./
+RUN chmod +x scalpel docker-entrypoint.sh
 
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["./docker-entrypoint.sh"]

@@ -30,6 +30,9 @@ RUN dos2unix docker-entrypoint.sh
 FROM debian:latest
 WORKDIR /mangahome
 
+# needed for SSL to work right
+RUN apt-get update && apt-get install -y ca-certificates
+
 COPY --from=build-stage /build/target/release/scalpel ./
 COPY --from=build-stage /build/docker-entrypoint.sh ./
 RUN chmod +x scalpel docker-entrypoint.sh

@@ -2,8 +2,8 @@ FROM debian:latest AS build-stage
 WORKDIR /build
 
 # install required packages
-ENV TZ=America/Los_Angeles
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+# ENV TZ=America/Los_Angeles
+# RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN apt-get update && apt-get install -y apt-transport-https
 RUN apt-get install -y curl wget lsb-release software-properties-common build-essential dos2unix
 

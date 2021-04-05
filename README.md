@@ -27,6 +27,11 @@ development, which would conflict in names. Plus, `MD@Home Rust` or `mdah-rs` so
 Scalpel was only chosen because "it sounded cool," there's no meaning behind it. Because of this,
 the name of the project may change in the future.
 
+## Support and Questions
+
+Support is and answering questions is not guaranteed for this client. To be honest, if you don't
+know how to use it, then you should probably stick to using the official client instead.
+
 ## Features
 
 - Ultra Fast HTTP server
@@ -35,27 +40,33 @@ the name of the project may change in the future.
 - HTTP Gzip Support
 - Pretty Console Logging
 - Support for JSON & YAML configurations
+- Docker Support / Builds
 
 ### Features-to-come
 
 - Prometheus / VictoriaMetrics
-- Docker Support / Builds
 - More Cache Engines (like plain filesystem or MongoDB)
 - Non-hardcoded Configuration Path
 - Better streaming of cache `MISS`es
 
 ## Getting Started
 
-Currently, the only way to obtain the binary is to build it. See the [Building](#building) section
-to see how to build the client on your platform. Thereafter, copy the binary and the
-`settings.sample.yaml` (renamed to `settings.yaml`) to the directory that you would like to run the
-client in.
+You can obtain the binary by building it youself or using a docker image. See
+[Docker Support](#docker-support) if you would like to run your client with docker, otherwise see
+the [Building](#building) section to see how to build the client on your platform. Thereafter, copy
+the binary and the `settings.sample.yaml` (renamed to `settings.yaml`) to the directory that you
+would like to run the client in.
 
 Then, configure your client (hint: [Configuration](#configuration)) by editing `settings.yaml`,
 and make sure to include your client secret, then start using:
 
 - `./scalpel` on linux (via command line)
 - Double clicking `scalpel.exe` on windows
+
+### Docker Support
+
+Scalpel can be downloaded and run using a docker image on platforms that support docker. To get started
+using docker, see the [docker](https://github.com/blockba5her/scalpel/tree/main/docker) documentation.
 
 ### Building
 
@@ -74,8 +85,7 @@ all of the required toolchain.
 
 1. Open terminal in directory with `Cargo.toml`
 2. Run `cargo build --release`
-3. Wait for Build to Complete
-4. Binary is located at `target/release/scalpel`
+3. Binary is located at `target/release/scalpel`
 
 **Building For Windows**
 

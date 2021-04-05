@@ -26,6 +26,9 @@ jobs:
                       type=semver,pattern={{version}}
                       type=semver,pattern={{major}}.{{minor}}
 
+            # buildx is required for caching
+            - uses: docker/setup-buildx-action@v1
+
             # cache the docker build so that it doesn't re-build every single time
             - name: cache docker
               uses: actions/cache@v2

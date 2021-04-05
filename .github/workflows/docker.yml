@@ -11,7 +11,8 @@ on:
 name: docker
 
 jobs:
-    docker:
+    deploy:
+        name: docker-deploy
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v2

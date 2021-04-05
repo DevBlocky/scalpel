@@ -19,15 +19,19 @@ jobs:
               uses: actions/cache@v2
               with:
                   path: ${{ runner.temp }}/llvm
-                  key: llvm-10
-
+                  key: llvm-11
             - name: install LLVM
               uses: KyleMayes/install-llvm-action@v1
               with:
-                  version: "10.0"
+                  version: "11.0"
                   directory: ${{ runner.temp }}/llvm
                   cached: ${{ steps.cache-llvm.outputs.cache-hit }}
             
+            - name: cache target
+              uses: actions/cache@v2
+              with:
+                  path: target
+                  key: build-target
             - run: cargo test
 
     build:
@@ -57,9 +61,12 @@ jobs:
                   directory: ${{ runner.temp }}/llvm
                   cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
+            - name: cache target
+              uses: actions/cache@v2
+              with:
+                  path: target
+                  key: build-target
             - run: cargo build --release
-              env:
-                LLVM_CONFIG_PATH: ${{ runner.temp }}/llvm/bin/llvm-config
 
             - uses: actions/upload-artifact@v2
               with:

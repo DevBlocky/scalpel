@@ -1,6 +1,7 @@
 on: [push]
-
 name: ci
+env:
+    CI: 1
 
 jobs:
     test:
@@ -23,18 +24,27 @@ jobs:
             - name: install LLVM
               uses: KyleMayes/install-llvm-action@v1
               with:
-                  version: "11.0"
+                  version: "11.1"
                   directory: ${{ runner.temp }}/llvm
                   cached: ${{ steps.cache-llvm.outputs.cache-hit }}
             
+            # cache rust dependency/build directories
+            - name: cache cargo
+              uses: actions/cache@v2
+              with:
+                  path: |
+                      ~/.cargo/registry
+                      ~/.cargo/git
+                  key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
             - name: cache target
               uses: actions/cache@v2
               with:
                   path: target
-                  key: build-target
+                  key: ${{ runner.os }}-build-target-${{ hashFiles('**/Cargo.lock') }}
+
             - run: cargo test
 
-    build:
+    build-release:
         name: build-ubuntu
         needs: test
         runs-on: ubuntu-latest
@@ -53,7 +63,6 @@ jobs:
               with:
                   path: ${{ runner.temp }}/llvm
                   key: llvm-11
-
             - name: install LLVM
               uses: KyleMayes/install-llvm-action@v1
               with:
@@ -61,11 +70,19 @@ jobs:
                   directory: ${{ runner.temp }}/llvm
                   cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
+            # cache rust dependency/build directories
+            - name: cache cargo
+              uses: actions/cache@v2
+              with:
+                  path: |
+                      ~/.cargo/registry
+                      ~/.cargo/git
+                  key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
             - name: cache target
               uses: actions/cache@v2
               with:
                   path: target
-                  key: build-target
+                  key: ${{ runner.os }}-build-target-${{ hashFiles('**/Cargo.lock') }}
             - run: cargo build --release
 
             - uses: actions/upload-artifact@v2

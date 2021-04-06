@@ -85,8 +85,19 @@ async fn md_service(
     )
 }
 
+/// Represents an error the HTTP error can cause where there is some io error binding to the port
+/// specified in the client configuration
+#[derive(Debug)]
+struct PortBindError(io::Error);
+impl std::fmt::Display for PortBindError {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(fmt, "error binding HTTP server to port (base: {})", self.0)
+    }
+}
+impl std::error::Error for PortBindError {}
+
 // TODO: Doc
-fn spawn_http_server(gs: Arc<GlobalState>, acceptor: ssl::SslAcceptorBuilder) -> io::Result<dev::Server> {
+fn spawn_http_server(gs: Arc<GlobalState>, acceptor: ssl::SslAcceptorBuilder) -> Result<dev::Server, PortBindError> {
     const COMPRESS: http::ContentEncoding = http::ContentEncoding::Identity;
 
     // obtain config options
@@ -146,7 +157,9 @@ fn spawn_http_server(gs: Arc<GlobalState>, acceptor: ssl::SslAcceptorBuilder) ->
         server = server.workers(worker_threads);
     }
 
-    Ok(server.bind_openssl(&bind_addr, acceptor)?.run())
+    server.bind_openssl(&bind_addr, acceptor)
+        .map_err(|x| PortBindError(x))
+        .map(|s| s.run())
 }
 
 // TODO: Doc
@@ -165,7 +178,10 @@ fn spawn_http_server_threaded(
         // completes (until the server is stopped)
         sys.block_on(async move {
             // create and start HTTP server using init_http_server
-            let srv = spawn_http_server(gs, acceptor).unwrap();
+            // if an error occurs, just panic the program
+            // TODO: in the future this can be handled more gracefully
+            let srv = spawn_http_server(gs, acceptor)
+                .unwrap_or_else(|e| panic!("{}", e));
 
             // send server through channel then await
             tx.send(srv.clone()).unwrap();

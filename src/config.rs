@@ -111,7 +111,7 @@ impl AppConfig {
         for path in &files {
             match Self::read_and_parse_file(path).await {
                 Ok(res) => return Some(res),
-                Err(e) => log::error!("{} (for file {:?})", e, path),
+                Err(e) => log::warn!("{} (for file {:?})", e, path),
             }
         }
         None

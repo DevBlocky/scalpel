@@ -5,7 +5,15 @@ WORKDIR /build
 # ENV TZ=America/Los_Angeles
 # RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN apt-get update && apt-get install -y apt-transport-https
-RUN apt-get install -y curl wget lsb-release software-properties-common build-essential dos2unix
+RUN apt-get install -y\
+    curl\
+    wget\
+    lsb-release\
+    software-properties-common\
+    build-essential\
+    libssl-dev\
+    pkg-config\
+    dos2unix
 
 # install rust toolchain
 ENV RUSTUP_HOME=/usr/local/rustup \

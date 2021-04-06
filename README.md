@@ -84,6 +84,7 @@ all of the required toolchain.
 **Building For Linux**
 
 1. Open terminal in directory with `Cargo.toml`
+2. Install required openssl package using `sudo apt-get update && sudo apt-get install libssl-dev`
 2. Run `cargo build --release`
 3. Binary is located at `target/release/scalpel`
 

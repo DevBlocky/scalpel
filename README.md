@@ -89,19 +89,18 @@ all of the required toolchain.
 
 **Building For Windows**
 
-1. Download Tooling:
+1. Download Additional Tooling:
     - Install [Git Bash](https://gitforwindows.org). Includes Clang and LLVM.
-    - Install [Strawberry Perl](https://strawberryperl.com). Needed for building OpenSSL.
-2. Open Git Bash terminal in directory with `Cargo.toml`
-3. Run `PATH=/c/Strawberry/perl/bin:$PATH` (assuming you installed Strawberry Perl at
-`C:\Strawberry`)
+    - Install [vcpkg](https://docs.microsoft.com/en-us/cpp/build/install-vcpkg?view=msvc-160&tabs=windows).
+2. For `vcpkg`, install `openssl` using `vcpkg install openssl --triplet=x64-windows-static-md`
+3. Open Git Bash terminal in directory with `Cargo.toml`
 4. In the same terminal, run `cargo build --release`
 5. Binary is located at `target/release/scalpel.exe`
 
 ## Configuration
 
 All configuration options for the client can be found in `settings.sample.yaml`. All settings are
-documented with what they do for the client.
+documented with what they do for the client. Settings are required unless otherwise documented.
 
 The client will read configurations from `settings.yaml` or `settings.json` in the current working
 directory, first looking for the `settings.yaml` configuration. All settings in the `settings.yaml`
@@ -119,8 +118,8 @@ change the `RUST_LOG` environment variable before starting the client. The accep
 - `WARN`
 - `ERROR`
 
-The default and recommended client log level is `INFO`. For more info on changing log levels, see
-[env_logger documentation](https://docs.rs/env_logger/0.8.3/env_logger/index.html). Example of
+The default and recommended client log level is `INFO`. For more info on changing log behavior, see
+[`env_logger` documentation](https://docs.rs/env_logger/0.8.3/env_logger/index.html). Example of
 changing the log level on linux:
 `RUST_LOG=DEBUG ./scalpel`
 

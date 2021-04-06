@@ -143,6 +143,7 @@ impl Application {
             .expect("cannot register ctrl+c handler");
 
         // perform initial ping to backend to get HTTP certificate
+        // if API is trustworthy, then second "expect" should never panic
         let mut crt = self
             .ping_backend()
             .await
@@ -150,7 +151,15 @@ impl Application {
             .expect("TLS certificate wasn't provided in initial ping");
 
         // spawn the HTTP server with the certificate
-        let mut server = http::ThreadedHttpServer::new(Arc::clone(&self.gs), &crt).unwrap();
+        // if there is a problem creating it, gracefully shutdown and panic
+        let mut server = match http::ThreadedHttpServer::new(Arc::clone(&self.gs), &crt) {
+            Ok(srv) => srv,
+            Err(_) => {
+                log::error!("there was a problem creating the http thread, gracefully shutting down...");
+                self.shutdown(None).await;
+                panic!("error creating HTTP server");
+            }
+        };
 
         let mut interval = tokio::time::interval(time::Duration::from_secs(1));
         let mut last_ping = time::Instant::now();
@@ -188,7 +197,7 @@ impl Application {
         }
 
         // we are no longer running, we should begin graceful shutdown
-        self.shutdown(server).await;
+        self.shutdown(Some(server)).await;
     }
 
     #[inline]
@@ -202,7 +211,7 @@ impl Application {
     ///
     /// This does not, however, gracefully shut down the actix server (wait for all keep-alives to
     /// drop) as that would take much time on top of the grace period.
-    async fn shutdown(&self, server: http::ThreadedHttpServer) {
+    async fn shutdown(&self, server: Option<http::ThreadedHttpServer>) {
         // ping the backend server for stop, so that we'll stop receiving requests sometime soon
         log::info!("sending stop signal to API");
         if let Err(e) = self.gs.backend.stop().await {
@@ -210,10 +219,13 @@ impl Application {
         }
 
         // wait until there are no more requests coming in
+        let mut interval = tokio::time::interval(time::Duration::from_secs(5));
         let start = time::Instant::now();
         let mut requests = self.get_num_requests();
         loop {
-            thread::sleep(time::Duration::from_secs(5));
+            interval.tick().await;
+
+            // break if we've had no requests in the interval
             let x = self.get_num_requests();
             if x == requests {
                 break;
@@ -228,8 +240,10 @@ impl Application {
             }
         }
 
-        log::info!("shutting down actix web server");
-        server.shutdown(false).await;
+        if let Some(srv) = server {
+            log::info!("shutting down actix web server");
+            srv.shutdown(false).await;
+        }
     }
 }
 

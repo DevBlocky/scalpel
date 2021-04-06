@@ -4,7 +4,7 @@ env:
     CI: 1
 
 jobs:
-    test:
+    build-release:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v2
@@ -43,51 +43,11 @@ jobs:
                   key: ${{ runner.os }}-build-target-${{ hashFiles('**/Cargo.lock') }}
 
             - run: cargo test
-
-    build-release:
-        name: build-ubuntu
-        needs: test
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v2
-
-            - name: install rust
-              uses: actions-rs/toolchain@v1
-              with:
-                  toolchain: stable
-                  profile: minimal
-
-            - name: cache LLVM
-              id: cache-llvm
-              uses: actions/cache@v2
-              with:
-                  path: ${{ runner.temp }}/llvm
-                  key: llvm-11
-            - name: install LLVM
-              uses: KyleMayes/install-llvm-action@v1
-              with:
-                  version: "11.1"
-                  directory: ${{ runner.temp }}/llvm
-                  cached: ${{ steps.cache-llvm.outputs.cache-hit }}
-
-            # cache rust dependency/build directories
-            - name: cache cargo
-              uses: actions/cache@v2
-              with:
-                  path: |
-                      ~/.cargo/registry
-                      ~/.cargo/git
-                  key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-            - name: cache target
-              uses: actions/cache@v2
-              with:
-                  path: target
-                  key: ${{ runner.os }}-build-target-${{ hashFiles('**/Cargo.lock') }}
             - run: cargo build --release
 
             - uses: actions/upload-artifact@v2
               with:
-                  name: scalpel-${{ matrix.os }}
+                  name: ${{ runner.os }}-scalpel
                   path: target/release/scalpel*
 
 # TODO: Add build for windows systems

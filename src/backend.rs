@@ -82,7 +82,7 @@ pub struct Backend {
     client: reqwest::Client,
 
     verify_tokens: atomic::AtomicBool,
-    upstream_url: RwLock<String>,
+    upstream_url: RwLock<Option<String>>,
     tls: RwLock<Option<TLSPayload>>,
     token_key: RwLock<Option<String>>,
 }
@@ -90,13 +90,15 @@ pub struct Backend {
 impl Backend {
     const URL: &'static str = "https://api.mangadex.network";
 
+    /// Creates a skeleton [`Backend`] that is ready to start pinging. If no ping has been
+    /// completed yet, then all getters will return `None`.
     pub fn new(config: Arc<AppConfig>) -> Self {
         Self {
             config,
             client: reqwest::Client::new(),
 
             verify_tokens: atomic::AtomicBool::new(false),
-            upstream_url: RwLock::new("".to_string()),
+            upstream_url: RwLock::new(None),
             tls: RwLock::new(None),
             token_key: RwLock::new(None)
         }
@@ -199,11 +201,11 @@ impl Backend {
         // weird syntax because we need to drop read lock before locking for write
         let update_upstream = {
             let inner = self.upstream_url.read().unwrap();
-            *inner != res.image_server
+            inner.as_ref() != Some(&res.image_server)
         };
         if update_upstream {
             let mut inner = self.upstream_url.write().unwrap();
-            *inner = res.image_server.clone();
+            *inner = Some(res.image_server.clone());
         }
 
         // read comment above this for reasoning on weird syntax
@@ -260,15 +262,10 @@ impl Backend {
         self.verify_tokens.load(atomic::Ordering::Relaxed)
     }
 
-    /// Loads the internally stored URL to the upstream image server. Will return `None` if there
-    /// is no internally stored upstream url (meaning there has been no successful ping to backend
-    /// yet)
+    /// Returns the upstream url stored from the API. Returns `None` if there has been no
+    /// successful ping yet, and `Some` containing the upstream URL as provided up the API.
     pub fn get_upstream(&self) -> Option<String> {
         let inner = self.upstream_url.read().unwrap();
-        if *inner == "" {
-            None
-        } else {
-            Some(inner.clone())
-        }
+        inner.clone()
     }
 }

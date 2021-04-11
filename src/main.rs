@@ -1,6 +1,6 @@
 use env_logger::Env;
+use std::time;
 use std::sync::{atomic, Arc, RwLock};
-use std::{thread, time};
 
 mod backend;
 mod cache;

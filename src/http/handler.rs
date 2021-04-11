@@ -44,35 +44,16 @@ pub(super) async fn response_from_cache(
     }
 }
 
-/// Checks whether the browser has the current file version cached
+/// Returns whether the browser has the resource already cached locally.
 ///
-/// Uses the `If-Modified-Since` header and save time for cache entry (if both exist) to find whether the
-/// cached version has been modified since the browser has received the data.
-///
-/// `Ok(true)` equates to browser cache being valid, `Ok(false)` means that the cache has been
-/// modified since the browser had originally cached it, and `Err(())` equates to a problem
-/// checking the header or parsing the date
-fn is_browser_cached(req: &HttpRequest, save_time: &time::SystemTime) -> Result<bool, ()> {
-    use std::str::FromStr;
+/// This is solely based on the `If-None-Match` header the client provides and the internally
+/// computed strong `ETag`. This will always return `false` if the provided `If-None-Match` is `*`.
+fn is_browser_cached(req: &HttpRequest, etag: &header::EntityTag) -> bool {
+    use actix_web::HttpMessage;
 
-    // try to convert the If-Modified-Since header into SystemTime
-    let mod_since: time::SystemTime = req
-        .headers()
-        .get(&http::header::IF_MODIFIED_SINCE)
-        .ok_or(())
-        .and_then(|h| h.to_str().map_err(|_| ()))
-        .and_then(|h| HttpDate::from_str(h).map_err(|_| ()))?
-        .into();
-
-    // find whether the cache has been modified since the browser has cached it
-    // NOTE: this must be a check between seconds because header doesn't store as much precision in
-    // the modified date as the system file.
-    match (
-        mod_since.duration_since(time::UNIX_EPOCH),
-        save_time.duration_since(time::UNIX_EPOCH),
-    ) {
-        (Ok(mod_since), Ok(save_time)) => Ok(mod_since.as_secs() >= save_time.as_secs()),
-        _ => Ok(false),
+    match req.get_header::<header::IfNoneMatch>() {
+        Some(header::IfNoneMatch::Items(ref items)) => items.iter().any(|x| etag.strong_eq(x)),
+        _ => false
     }
 }
 
@@ -91,26 +72,31 @@ fn mime_from_request(req: &HttpRequest) -> mime_guess::Mime {
 ///
 /// Sends the bytes of the cached image to the client unless the client has already proved that
 /// they have the image cached locally. Will also set gzip (if enabled by client) and provide
-/// necessary headers (like `Last-Modified`)
+/// necessary headers (like `ETag` and `Vary`)
 fn handle_cache_hit(
     req: &HttpRequest,
-    (image_bytes, save_time): crate::cache::ImageEntry,
+    (image_bytes, uid): crate::cache::ImageEntry,
     gzip: bool,
 ) -> HttpResponse {
     // get the MIME type from the path
     let mime = mime_from_request(req);
 
+    // check whether the browser already has the image cached locally
+    let etag = header::EntityTag::strong(uid);
+    let is_client_cached = is_browser_cached(req, &etag);
+
     // create response object with headers that should be in every response
     let mut res = HttpResponse::build(StatusCode::OK);
-    res.append_header(header::LastModified(HttpDate::from(save_time)))
-        .append_header(header::ContentType(mime))
+    res.append_header(header::ContentType(mime))
+        .append_header(header::ETag(etag))
+        .append_header(("Vary", "Accept-Encoding"))
         .append_header(("X-Cache", "HIT"));
 
     // if the image is already cached in the browser, then we can just return the associated code
     // telling the browser that it doesn't need to download anything
-    match is_browser_cached(req, &save_time) {
-        Ok(true) => return res.status(StatusCode::NOT_MODIFIED).finish(),
-        _ => {}
+    if is_client_cached {
+        log::debug!("Browser Cache: HIT");
+        return res.status(StatusCode::NOT_MODIFIED).finish();
     }
 
     // set the encoding to gzip if it is enabled by the client and the browser supports/accepts it
@@ -127,9 +113,7 @@ fn handle_cache_hit(
     }
 
     // stream the data to the client
-    res
-        .append_header(("Vary", "Accept-Encoding"))
-        .body(image_bytes)
+    res.body(image_bytes)
 }
 
 /// A Unit Struct that represents an error where the upstream url is unset in the backend

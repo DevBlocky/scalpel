@@ -27,6 +27,7 @@ openssl = "0.10.33"
 actix-web = {version = "4.0.0-beta.5", features = ["openssl"]}
 ctrlc = {version = "3.1.8", features = ["termination"]}
 reqwest = {version = "0.11.2", features = ["json", "stream"]}
+hex = "0.4.3"
 
 [dependencies.tokio]
 version = "1.4.0"

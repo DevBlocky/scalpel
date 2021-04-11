@@ -160,7 +160,7 @@ impl RocksCache {
         chap_hash: &str,
         image: &str,
         saver: bool,
-    ) -> Result<Option<(Vec<u8>, time::SystemTime)>, CacheError> {
+    ) -> Result<Option<super::ImageEntry>, CacheError> {
         // find the bytes in the database
         let db_bytes = {
             let image_cf = self.get_image_cf();
@@ -175,11 +175,10 @@ impl RocksCache {
             let entry = bincode::deserialize::<ImageEntry>(&serialized_bytes)
                 .map_err(|e| CacheError::Bincode(e))?;
 
-            // convert millis from epoch to time::SystemTime
-            // u128 to u64 won't cause overflow because u64 is already insanely big and can handle
-            // milliseconds up to an insane date
-            let save_date = time::UNIX_EPOCH + time::Duration::from_millis(entry.put_time as u64);
-            Some((Vec::from(entry.bytes), save_date))
+            // convert the image entry checksum into a unique identifier, used as the ETag for the
+            // image. this is essentially just the hash representation of the image bytes.
+            let uid = hex::encode(&entry.checksum);
+            Some((Vec::from(entry.bytes), uid))
         } else {
             None
         })

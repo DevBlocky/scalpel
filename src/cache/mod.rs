@@ -1,4 +1,3 @@
-use std::time;
 use async_trait::async_trait;
 
 // re-export different caches
@@ -7,7 +6,9 @@ use async_trait::async_trait;
 mod rocks;
 pub use rocks::RocksCache;
 
-pub type ImageEntry = (Vec<u8>, time::SystemTime);
+/// A basic type representing an image in cache. First value represents the bytes and second value
+/// represents an ETag (or unique identifier) for the image.
+pub type ImageEntry = (Vec<u8>, String);
 
 /// Trait for an MD@Home cache implementation.
 ///

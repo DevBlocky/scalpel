@@ -230,7 +230,7 @@ async fn handle_cache_miss(
     // save the image to the cache
     {
         let timer = Timer::start();
-        if !gs.cache.save(chap_hash, image, saver, &res.bytes).await {
+        if !gs.cache.save(chap_hash, image, saver, Bytes::clone(&res.bytes)).await {
             log::warn!(
                 "error saving upstream to cache, hopefully there was some more info on this!"
             );

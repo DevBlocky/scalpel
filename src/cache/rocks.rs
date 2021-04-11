@@ -5,6 +5,7 @@
 
 use crate::config::RocksConfig;
 use async_trait::async_trait;
+use bytes::Bytes;
 use std::time;
 
 /// Type alias that is meant to represent an array of bytes of an MD5 hash
@@ -16,24 +17,24 @@ fn make_checksum(bytes: &[u8]) -> Md5Bytes {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-struct ImageEntry<'a> {
+struct ImageEntry {
     /// Milliseconds since UNIX_EPOCH since this entry has been put into the database
     put_time: u128,
     /// Checksum bytes used to verify the bytes that make up the image
     checksum: Md5Bytes,
 
     /// The bytes that make up the image
-    bytes: &'a [u8],
+    bytes: Bytes,
 }
 
-impl<'a> From<&'a [u8]> for ImageEntry<'a> {
-    fn from(bytes: &'a [u8]) -> Self {
+impl From<Bytes> for ImageEntry {
+    fn from(bytes: Bytes) -> Self {
         Self {
             put_time: time::SystemTime::now()
                 .duration_since(time::UNIX_EPOCH)
                 .map(|x| x.as_millis())
                 .unwrap_or_default(),
-            checksum: make_checksum(bytes),
+            checksum: make_checksum(&bytes),
             bytes,
         }
     }
@@ -91,7 +92,11 @@ impl RocksCache {
             /* tune writes */
             if cfg.write_rate_limit > 0 {
                 // enable cfg rate limiter if it's above 0
-                db_opts.set_ratelimiter((cfg.write_rate_limit * Self::MEBIBYTE) as i64, 100_000, 10);
+                db_opts.set_ratelimiter(
+                    (cfg.write_rate_limit * Self::MEBIBYTE) as i64,
+                    100_000,
+                    10,
+                );
             }
             db_opts.set_write_buffer_size(cfg.write_buffer_size as usize * Self::MEBIBYTE); // increases RAM usage but also write speed
 
@@ -135,7 +140,7 @@ impl RocksCache {
         chap_hash: &str,
         image: &str,
         saver: bool,
-        data: &[u8],
+        data: Bytes,
     ) -> Result<(), CacheError> {
         let image_cf = self.get_image_cf();
         let key = Self::get_cache_key(chap_hash, image, saver);
@@ -178,7 +183,7 @@ impl RocksCache {
             // convert the image entry checksum into a unique identifier, used as the ETag for the
             // image. this is essentially just the hash representation of the image bytes.
             let uid = hex::encode(&entry.checksum);
-            Some((Vec::from(entry.bytes), uid))
+            Some((entry.bytes, uid))
         } else {
             None
         })
@@ -228,7 +233,7 @@ impl super::ImageCache for RocksCache {
             .and_then(|x| x)
     }
 
-    async fn save(&self, chap_hash: &str, image: &str, saver: bool, data: &[u8]) -> bool {
+    async fn save(&self, chap_hash: &str, image: &str, saver: bool, data: Bytes) -> bool {
         self.save_to_db(chap_hash, image, saver, data)
             // log any errors that may occur
             .map_err(|e| {

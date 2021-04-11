@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use bytes::Bytes;
 
 // re-export different caches
 // mod fs;
@@ -8,7 +9,7 @@ pub use rocks::RocksCache;
 
 /// A basic type representing an image in cache. First value represents the bytes and second value
 /// represents an ETag (or unique identifier) for the image.
-pub type ImageEntry = (Vec<u8>, String);
+pub type ImageEntry = (Bytes, String);
 
 /// Trait for an MD@Home cache implementation.
 ///
@@ -45,7 +46,7 @@ pub trait ImageCache: Send + Sync {
     ///
     /// Implementation should also focus on this being as efficient as possible, and to use async
     /// wherever possible, as this can be called frequently
-    async fn save(&self, chap_hash: &str, image: &str, saver: bool, data: &[u8]) -> bool;
+    async fn save(&self, chap_hash: &str, image: &str, saver: bool, data: Bytes) -> bool;
 
     /// Reports the total size of the cache database in bytes.
     ///

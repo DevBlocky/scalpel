@@ -51,7 +51,7 @@ async fn md_service(
     let saver = path.archive_type == "data-saver";
 
     // verify the token provided in the request url if verify tokens is enabled
-    if gs.backend.get_verify_tokens() {
+    if !gs.config.skip_tokens && gs.backend.get_verify_tokens() {
         // unlock verifier mutex
         let v = gs.verifier.read().unwrap();
 
@@ -97,7 +97,10 @@ impl std::fmt::Display for PortBindError {
 impl std::error::Error for PortBindError {}
 
 // TODO: Doc
-fn spawn_http_server(gs: Arc<GlobalState>, acceptor: ssl::SslAcceptorBuilder) -> Result<dev::Server, PortBindError> {
+fn spawn_http_server(
+    gs: Arc<GlobalState>,
+    acceptor: ssl::SslAcceptorBuilder,
+) -> Result<dev::Server, PortBindError> {
     const COMPRESS: http::ContentEncoding = http::ContentEncoding::Identity;
 
     // obtain config options
@@ -157,7 +160,8 @@ fn spawn_http_server(gs: Arc<GlobalState>, acceptor: ssl::SslAcceptorBuilder) ->
         server = server.workers(worker_threads);
     }
 
-    server.bind_openssl(&bind_addr, acceptor)
+    server
+        .bind_openssl(&bind_addr, acceptor)
         .map_err(|x| PortBindError(x))
         .map(|s| s.run())
 }
@@ -180,8 +184,7 @@ fn spawn_http_server_threaded(
             // create and start HTTP server using init_http_server
             // if an error occurs, just panic the program
             // TODO: in the future this can be handled more gracefully
-            let srv = spawn_http_server(gs, acceptor)
-                .unwrap_or_else(|e| panic!("{}", e));
+            let srv = spawn_http_server(gs, acceptor).unwrap_or_else(|e| panic!("{}", e));
 
             // send server through channel then await
             tx.send(srv.clone()).unwrap();
@@ -212,8 +215,8 @@ impl ThreadedHttpServer {
     /// Result is `Err(())` if spawned thread panics due to misconfiguration
     pub fn new(gs: Arc<GlobalState>, cert: &TLSPayload) -> Result<Self, ()> {
         // Spawn the server in a separate thread and wait for it fully spawn
-        let acceptor = Self::cert_payload_to_acceptor(cert, gs.config.enforce_secure_tls)
-            .map_err(|e| {
+        let acceptor =
+            Self::cert_payload_to_acceptor(cert, gs.config.enforce_secure_tls).map_err(|e| {
                 log::error!("error creating ssl acceptor: {}", e);
                 ()
             })?;

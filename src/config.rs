@@ -9,6 +9,8 @@ pub struct AppConfig {
     // basic client configuration
     pub client_secret: String,
     pub max_grace_period: u64,
+    #[serde(default)]
+    pub skip_tokens: bool,
 
     // cache configuration
     pub cache_size_mebibytes: u32,
@@ -56,7 +58,10 @@ impl std::fmt::Display for ConfigError {
             Self::IoError(e) => write!(fmt, "error opening or reading file: {}", e),
             Self::YamlParseError(e) => write!(fmt, "error parsing yaml: {}", e),
             Self::JsonParseError(e) => write!(fmt, "error parsing json: {}", e),
-            Self::UnexpectedProblem => write!(fmt, "unexpected problem happened when handling config parse")
+            Self::UnexpectedProblem => write!(
+                fmt,
+                "unexpected problem happened when handling config parse"
+            ),
         }
     }
 }

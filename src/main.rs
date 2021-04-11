@@ -1,6 +1,6 @@
 use env_logger::Env;
-use std::time;
 use std::sync::{atomic, Arc, RwLock};
+use std::time;
 
 mod backend;
 mod cache;
@@ -155,7 +155,9 @@ impl Application {
         let mut server = match http::ThreadedHttpServer::new(Arc::clone(&self.gs), &crt) {
             Ok(srv) => srv,
             Err(_) => {
-                log::error!("there was a problem creating the http thread, gracefully shutting down...");
+                log::error!(
+                    "there was a problem creating the http thread, gracefully shutting down..."
+                );
                 self.shutdown(None).await;
                 panic!("error creating HTTP server");
             }
@@ -260,6 +262,15 @@ async fn main() {
         log::error!("unable to find a valid configuration file. panic incoming...");
         panic!("no valid config");
     });
+
+    // panic if cache size is less then minimum 40GiB
+    if config.cache_size_mebibytes < 40960 {
+        log::error!(
+            "specified cache size must be at least 40GiB (40960MiB)! current: {}MiB",
+            config.cache_size_mebibytes
+        );
+        panic!("cache size does not meet minimum requirements");
+    }
 
     let mut app = Application::new(config);
     app.run().await;

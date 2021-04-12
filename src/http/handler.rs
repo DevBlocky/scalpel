@@ -16,6 +16,7 @@ use actix_web::{
     HttpRequest, HttpResponse,
 };
 use bytes::Bytes;
+use lazy_static::lazy_static;
 use std::sync::Arc;
 use std::time;
 
@@ -43,6 +44,8 @@ pub(super) async fn response_from_cache(
         handle_cache_miss(req, gs, (chap_hash, image, saver)).await
     }
 }
+
+/* CACHE HIT HANDLER LOGIC BELOW */
 
 /// Returns whether the browser has the resource already cached locally.
 ///
@@ -116,6 +119,14 @@ fn handle_cache_hit(
     res.body(image_bytes)
 }
 
+
+/* CACHE MISS HANDLER LOGIC BELOW */
+
+lazy_static! {
+    /// Lazily loaded HTTP Client that will be used for polling upstream for images.
+    static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::default();
+}
+
 /// A Unit Struct that represents an error where the upstream url is unset in the backend
 ///
 /// This error is almost certain to never be constructed as Backend sets the image server url
@@ -157,7 +168,7 @@ async fn poll_upstream(
         &upstream, archive_type, chap_hash, image
     ))?;
 
-    let res = reqwest::get(url).await?;
+    let res = HTTP_CLIENT.get(url).send().await?;
     let status = res.status();
 
     // get the mime type from upstream, or try to guess

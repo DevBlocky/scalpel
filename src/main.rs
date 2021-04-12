@@ -152,12 +152,11 @@ impl Application {
 
         // spawn the HTTP server with the certificate
         // if there is a problem creating it, gracefully shutdown and panic
-        let mut server = match http::ThreadedHttpServer::new(Arc::clone(&self.gs), &crt) {
+        let mut server = match http::HttpServerLifecycle::new(Arc::clone(&self.gs), &crt) {
             Ok(srv) => srv,
-            Err(_) => {
-                log::error!(
-                    "there was a problem creating the http thread, gracefully shutting down..."
-                );
+            Err(e) => {
+                log::error!("there was a problem creating the http server: {}", e);
+                log::error!("gracefully shutting down then panic due to error...");
                 self.shutdown(None).await;
                 panic!("error creating HTTP server");
             }
@@ -189,12 +188,6 @@ impl Application {
                 self.try_shrink_db().await;
             }
 
-            // attempt to respawn if server is not healthy
-            if !server.is_healthy() {
-                log::error!("http thread detected as unhealthy, attempting restart");
-                server.respawn_with_new_cert(&crt).await.unwrap();
-            }
-
             interval.tick().await;
         }
 
@@ -213,7 +206,7 @@ impl Application {
     ///
     /// This does not, however, gracefully shut down the actix server (wait for all keep-alives to
     /// drop) as that would take much time on top of the grace period.
-    async fn shutdown(&self, server: Option<http::ThreadedHttpServer>) {
+    async fn shutdown(&self, server: Option<http::HttpServerLifecycle>) {
         // ping the backend server for stop, so that we'll stop receiving requests sometime soon
         log::info!("sending stop signal to API");
         if let Err(e) = self.gs.backend.stop().await {
@@ -249,7 +242,7 @@ impl Application {
     }
 }
 
-#[tokio::main]
+#[actix_web::main]
 async fn main() {
     // init the logger with INFO level
     env_logger::Builder::from_env(Env::default().default_filter_or("INFO")).init();
@@ -271,6 +264,7 @@ async fn main() {
         );
         panic!("cache size does not meet minimum requirements");
     }
+
 
     let mut app = Application::new(config);
     app.run().await;

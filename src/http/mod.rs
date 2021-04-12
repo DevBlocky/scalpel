@@ -2,12 +2,12 @@ use crate::backend::TLSPayload;
 use crate::constants as c;
 use crate::GlobalState;
 use actix_web::{
-    dev, error, http, middleware, rt, web, App, HttpRequest, HttpResponse, HttpServer,
+    dev, error, http, middleware, web, App, HttpRequest, HttpResponse, HttpServer,
     ResponseError, Result as WebResult,
 };
 use openssl::ssl;
-use std::sync::{atomic, mpsc, Arc};
-use std::{io, thread};
+use std::sync::{atomic, Arc};
+use std::io;
 
 mod handler;
 
@@ -88,7 +88,7 @@ async fn md_service(
 /// Represents an error the HTTP error can cause where there is some io error binding to the port
 /// specified in the client configuration
 #[derive(Debug)]
-struct PortBindError(io::Error);
+pub struct PortBindError(io::Error);
 impl std::fmt::Display for PortBindError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(fmt, "error binding HTTP server to port (base: {})", self.0)
@@ -166,66 +166,49 @@ fn spawn_http_server(
         .map(|s| s.run())
 }
 
-// TODO: Doc
-fn spawn_http_server_threaded(
-    gs: Arc<GlobalState>,
-    acceptor: ssl::SslAcceptorBuilder,
-) -> Result<(mpsc::Receiver<dev::Server>, dev::Server), mpsc::RecvError> {
-    let (tx, rx) = mpsc::channel();
-
-    thread::spawn(move || {
-        // The System runtime is a manager for the actix web lifecycle, and we need to manually
-        // create it in a separate thread so it can house the Actix web server.
-        let sys = rt::System::new();
-
-        // create an async function then have the system runtime block that function until it
-        // completes (until the server is stopped)
-        sys.block_on(async move {
-            // create and start HTTP server using init_http_server
-            // if an error occurs, just panic the program
-            // TODO: in the future this can be handled more gracefully
-            let srv = spawn_http_server(gs, acceptor).unwrap_or_else(|e| panic!("{}", e));
-
-            // send server through channel then await
-            tx.send(srv.clone()).unwrap();
-            srv.await
-        })
-        .unwrap();
-    });
-
-    // Wait for, then receive and return the server structure
-    let srv = rx.recv()?;
-    Ok((rx, srv))
+/// Error that represents all of the addressable errors of creating the HTTP Server.
+#[derive(Debug)]
+pub enum Error {
+    Acceptor(ssl::Error),
+    Port(PortBindError)
 }
+impl std::fmt::Display for Error {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Acceptor(e) => write!(fmt, "{}", e),
+            Self::Port(e) => write!(fmt, "{}", e),
+        }
+    }
+}
+impl std::error::Error for Error {}
 
-/// Lifecycle handler for an Actix Web Server instance.
+/// Lifecycle handler for the MD@Home HTTP server.
 ///
-/// Handles the lifecycle of a threaded instance of the Actix Web Server, providing information
-/// such as the `TokenVerifier`, `AppConfig`, Upstream URL, and SSL Certificates
-pub struct ThreadedHttpServer {
+/// Responsible for spawning and respawning the HTTP server and converting the specified plaintext
+/// certificates into the OpenSSL counterparts
+pub struct HttpServerLifecycle {
     gs: Arc<GlobalState>,
-
     actix: dev::Server,
-    channel: mpsc::Receiver<dev::Server>,
 }
 
-impl ThreadedHttpServer {
-    /// Spawns a new Actix Web Server in a separate thread using the information provided
+impl HttpServerLifecycle {
+    /// Creates a new HTTP Server that will accept requests for the MD@Home client.
     ///
-    /// Result is `Err(())` if spawned thread panics due to misconfiguration
-    pub fn new(gs: Arc<GlobalState>, cert: &TLSPayload) -> Result<Self, ()> {
-        // Spawn the server in a separate thread and wait for it fully spawn
+    /// This will take the certificate it should use and the current global state and return a new
+    /// instance of `Self` if successful. Errors will be propagated up the stack.
+    pub fn new(gs: Arc<GlobalState>, cert: &TLSPayload) -> Result<Self, Error> {
+        // configures the SSL certificate with OpenSSL
         let acceptor =
-            Self::cert_payload_to_acceptor(cert, gs.config.enforce_secure_tls).map_err(|e| {
-                log::error!("error creating ssl acceptor: {}", e);
-                ()
-            })?;
-        let (rx, srv) = spawn_http_server_threaded(Arc::clone(&gs), acceptor).map_err(|_| ())?;
+            Self::cert_payload_to_acceptor(cert, gs.config.enforce_secure_tls)
+            .map_err(|e| Error::Acceptor(e))?;
+
+        // spawn the HTTP server and begin accepting requests
+        let srv = spawn_http_server(Arc::clone(&gs), acceptor)
+            .map_err(|e| Error::Port(e))?;
 
         Ok(Self {
             gs,
             actix: srv,
-            channel: rx,
         })
     }
 
@@ -233,20 +216,19 @@ impl ThreadedHttpServer {
     /// fullchain certificate and private key for SSL.
     // NOTE: Unfortunately, there is no way (to my knowledge) to change SSL cert while the Actix
     // Web server is running, therefore it must be shutdown and respawned
-    pub async fn respawn_with_new_cert(&mut self, cert: &TLSPayload) -> Result<(), ()> {
+    pub async fn respawn_with_new_cert(&mut self, cert: &TLSPayload) -> Result<(), Error> {
         // stop old server immediately. if this were graceful, it would wait for all keep-alive
         // connections to close off first.
         self.shutdown(false).await;
 
         let acceptor = Self::cert_payload_to_acceptor(cert, self.gs.config.enforce_secure_tls)
-            .map_err(|e| {
-                log::error!("error creating ssl acceptor: {}", e);
-                ()
-            })?;
-        let (rx, srv) =
-            spawn_http_server_threaded(Arc::clone(&self.gs), acceptor).map_err(|_| ())?;
+            .map_err(|e| Error::Acceptor(e))?;
+
+        let srv =
+            spawn_http_server(Arc::clone(&self.gs), acceptor)
+            .map_err(|e| Error::Port(e))?;
         self.actix = srv;
-        self.channel = rx;
+
         Ok(())
     }
 
@@ -288,18 +270,5 @@ impl ThreadedHttpServer {
     /// Wrapper for the internal Actix Web server stop function
     pub async fn shutdown(&self, graceful: bool) {
         self.actix.stop(graceful).await
-    }
-
-    /// Returns whether the thread housing the HTTP server is still alive or not. Can be used to
-    /// see if the HTTP thread has unexpectedly panicked
-    pub fn is_healthy(&self) -> bool {
-        // loop through messages channel messages until error is found, and return whether the
-        // error is Disconnected (meaning the channel has been severed and the http thread no
-        // longer exists)
-        loop {
-            if let Err(e) = self.channel.try_recv() {
-                return e != mpsc::TryRecvError::Disconnected;
-            }
-        }
     }
 }

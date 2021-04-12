@@ -10,6 +10,7 @@ use std::io;
 use std::sync::{atomic, Arc};
 
 mod handler;
+mod chunked;
 
 #[derive(serde::Deserialize)]
 struct MdPathArgs {

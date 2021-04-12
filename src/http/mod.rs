@@ -2,12 +2,12 @@ use crate::backend::TLSPayload;
 use crate::constants as c;
 use crate::GlobalState;
 use actix_web::{
-    dev, error, http, middleware, web, App, HttpRequest, HttpResponse, HttpServer,
-    ResponseError, Result as WebResult,
+    dev, error, http, middleware, web, App, HttpRequest, HttpResponse, HttpServer, ResponseError,
+    Result as WebResult,
 };
 use openssl::ssl;
-use std::sync::{atomic, Arc};
 use std::io;
+use std::sync::{atomic, Arc};
 
 mod handler;
 
@@ -170,7 +170,7 @@ fn spawn_http_server(
 #[derive(Debug)]
 pub enum Error {
     Acceptor(ssl::Error),
-    Port(PortBindError)
+    Port(PortBindError),
 }
 impl std::fmt::Display for Error {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -198,18 +198,13 @@ impl HttpServerLifecycle {
     /// instance of `Self` if successful. Errors will be propagated up the stack.
     pub fn new(gs: Arc<GlobalState>, cert: &TLSPayload) -> Result<Self, Error> {
         // configures the SSL certificate with OpenSSL
-        let acceptor =
-            Self::cert_payload_to_acceptor(cert, gs.config.enforce_secure_tls)
+        let acceptor = Self::cert_payload_to_acceptor(cert, gs.config.enforce_secure_tls)
             .map_err(|e| Error::Acceptor(e))?;
 
         // spawn the HTTP server and begin accepting requests
-        let srv = spawn_http_server(Arc::clone(&gs), acceptor)
-            .map_err(|e| Error::Port(e))?;
+        let srv = spawn_http_server(Arc::clone(&gs), acceptor).map_err(|e| Error::Port(e))?;
 
-        Ok(Self {
-            gs,
-            actix: srv,
-        })
+        Ok(Self { gs, actix: srv })
     }
 
     /// Forcefully shuts down the last instance of the Actix Web Server, respawning with a new
@@ -224,9 +219,7 @@ impl HttpServerLifecycle {
         let acceptor = Self::cert_payload_to_acceptor(cert, self.gs.config.enforce_secure_tls)
             .map_err(|e| Error::Acceptor(e))?;
 
-        let srv =
-            spawn_http_server(Arc::clone(&self.gs), acceptor)
-            .map_err(|e| Error::Port(e))?;
+        let srv = spawn_http_server(Arc::clone(&self.gs), acceptor).map_err(|e| Error::Port(e))?;
         self.actix = srv;
 
         Ok(())

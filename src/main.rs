@@ -265,7 +265,6 @@ async fn main() {
         panic!("cache size does not meet minimum requirements");
     }
 
-
     let mut app = Application::new(config);
     app.run().await;
 }

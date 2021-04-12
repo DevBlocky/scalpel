@@ -56,7 +56,7 @@ fn is_browser_cached(req: &HttpRequest, etag: &header::EntityTag) -> bool {
 
     match req.get_header::<header::IfNoneMatch>() {
         Some(header::IfNoneMatch::Items(ref items)) => items.iter().any(|x| etag.strong_eq(x)),
-        _ => false
+        _ => false,
     }
 }
 
@@ -118,7 +118,6 @@ fn handle_cache_hit(
     // stream the data to the client
     res.body(image_bytes)
 }
-
 
 /* CACHE MISS HANDLER LOGIC BELOW */
 
@@ -241,7 +240,11 @@ async fn handle_cache_miss(
     // save the image to the cache
     {
         let timer = Timer::start();
-        if !gs.cache.save(chap_hash, image, saver, Bytes::clone(&res.bytes)).await {
+        if !gs
+            .cache
+            .save(chap_hash, image, saver, Bytes::clone(&res.bytes))
+            .await
+        {
             log::warn!(
                 "error saving upstream to cache, hopefully there was some more info on this!"
             );

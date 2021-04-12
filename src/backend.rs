@@ -100,7 +100,7 @@ impl Backend {
             verify_tokens: atomic::AtomicBool::new(false),
             upstream_url: RwLock::new(None),
             tls: RwLock::new(None),
-            token_key: RwLock::new(None)
+            token_key: RwLock::new(None),
         }
     }
 

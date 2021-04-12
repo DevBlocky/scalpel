@@ -168,6 +168,8 @@ impl Application {
 
         // run until we should begin shutdown sequence
         while self.should_run.load(atomic::Ordering::SeqCst) {
+            interval.tick().await;
+
             // re-ping server every minute
             if last_ping.elapsed().as_secs() >= 60 {
                 last_ping = time::Instant::now();
@@ -187,8 +189,6 @@ impl Application {
                 last_shrink = time::Instant::now();
                 self.try_shrink_db().await;
             }
-
-            interval.tick().await;
         }
 
         // we are no longer running, we should begin graceful shutdown
@@ -214,11 +214,10 @@ impl Application {
         }
 
         // wait until there are no more requests coming in
-        let mut interval = tokio::time::interval(time::Duration::from_secs(5));
         let start = time::Instant::now();
         let mut requests = self.get_num_requests();
         loop {
-            interval.tick().await;
+            tokio::time::sleep(time::Duration::from_secs(5)).await;
 
             // break if we've had no requests in the interval
             let x = self.get_num_requests();

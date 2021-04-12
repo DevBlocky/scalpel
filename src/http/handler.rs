@@ -123,7 +123,10 @@ fn handle_cache_hit(
 
 lazy_static! {
     /// Lazily loaded HTTP Client that will be used for polling upstream for images.
-    static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::default();
+    static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("misconfigured lazy_static http client");
 }
 
 /// A Unit Struct that represents an error where the upstream url is unset in the backend

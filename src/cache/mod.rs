@@ -7,6 +7,79 @@ use bytes::Bytes;
 mod rocks;
 pub use rocks::RocksCache;
 
+/// A data structure that represents the three components of an image path:
+/// - The Chapter Hash
+/// - The Image Name
+/// - Whether it's `data` or `data-saver`
+#[derive(Debug, Clone)]
+pub struct ImageKey {
+    chapter: String,
+    image: String,
+    data_saver: bool,
+}
+
+impl ImageKey {
+    /// Creates a new [`ImageKey`] instance using the provided `String`s
+    pub fn new(chapter: String, image: String, data_saver: bool) -> Self {
+        Self {
+            chapter,
+            image,
+            data_saver,
+        }
+    }
+
+    /// Converts `str`-like parameters into `String`s then creates the new structure
+    pub fn from_str_like<C: AsRef<str>, I: AsRef<str>>(
+        chapter: C,
+        image: I,
+        data_saver: bool,
+    ) -> Self {
+        Self::new(
+            String::from(chapter.as_ref()),
+            String::from(image.as_ref()),
+            data_saver,
+        )
+    }
+
+    /// Retrieves the chapter hash associated with the key
+    #[inline]
+    pub fn chapter(&self) -> &str {
+        &self.chapter
+    }
+    /// Retrieves the file associated with the key
+    #[inline]
+    pub fn image(&self) -> &str {
+        &self.image
+    }
+    /// Retrieves if the key is data saver or not
+    #[inline]
+    pub fn data_saver(&self) -> bool {
+        self.data_saver
+    }
+
+    /// Returns a string representation of `data_saver`
+    #[inline]
+    pub fn archive_name(&self) -> &'static str {
+        if self.data_saver() {
+            "data-saver"
+        } else {
+            "data"
+        }
+    }
+}
+
+impl std::fmt::Display for ImageKey {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            fmt,
+            "/{}/{}/{}",
+            self.archive_name(),
+            self.chapter(),
+            self.image()
+        )
+    }
+}
+
 /// A basic type representing an image in cache. First value represents the bytes and second value
 /// represents an ETag (or unique identifier) for the image.
 pub type ImageEntry = (Bytes, String);
@@ -36,7 +109,7 @@ pub trait ImageCache: Send + Sync {
     ///
     /// Implementation should also focus on this being as efficient as possible, and to use async
     /// wherever possible, as this will be called frequently
-    async fn load(&self, chap_hash: &str, image: &str, saver: bool) -> Option<ImageEntry>;
+    async fn load(&self, key: &ImageKey) -> Option<ImageEntry>;
 
     /// Save an image to the cache, returning whether it was successful.
     ///
@@ -46,7 +119,7 @@ pub trait ImageCache: Send + Sync {
     ///
     /// Implementation should also focus on this being as efficient as possible, and to use async
     /// wherever possible, as this can be called frequently
-    async fn save(&self, chap_hash: &str, image: &str, saver: bool, data: Bytes) -> bool;
+    async fn save(&self, key: &ImageKey, data: Bytes) -> bool;
 
     /// Reports the total size of the cache database in bytes.
     ///

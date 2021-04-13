@@ -5,6 +5,7 @@
 
 use super::chunked::{ChunkedUpstreamPoll, UpstreamStream};
 use crate::backend::Backend;
+use crate::cache::ImageKey;
 use crate::utils::Timer;
 use crate::GlobalState;
 use actix_web::{
@@ -26,12 +27,12 @@ pub(super) async fn response_from_cache(
     uid: &str, // unique-id that represents the request (used for logging)
     req: &HttpRequest,
     gs: &Arc<GlobalState>,
-    (chap_hash, image, saver): (&str, &str, bool),
+    key: ImageKey,
 ) -> HttpResponse {
     // attempt to load image from cache (timing response times)
     let cache_hit = {
         let timer = Timer::start();
-        let cache_hit = gs.cache.load(chap_hash, image, saver).await;
+        let cache_hit = gs.cache.load(&key).await;
         log::debug!("({}) cache lookup in {}ms", uid, timer.elapsed());
         cache_hit
     };
@@ -41,7 +42,7 @@ pub(super) async fn response_from_cache(
         handle_cache_hit(req, cache_hit, gs.config.gzip_compress)
     } else {
         // the result was not found in cache, aka MISS
-        handle_cache_miss(req, gs, (chap_hash, image, saver)).await
+        handle_cache_miss(req, gs, key).await
     }
 }
 
@@ -158,16 +159,17 @@ struct UpstreamResponse {
 async fn start_poll_upstream(
     req: &HttpRequest,
     backend: &Backend,
-    archive_type: &str,
-    chap_hash: &str,
-    image: &str,
+    key: &ImageKey,
 ) -> Result<UpstreamResponse, Box<dyn std::error::Error>> {
     use std::str::FromStr;
 
     let upstream = backend.get_upstream().ok_or(NoUpstreamError)?;
     let url = reqwest::Url::parse(&format!(
         "{}/{}/{}/{}",
-        &upstream, archive_type, chap_hash, image
+        &upstream,
+        key.archive_name(),
+        key.chapter(),
+        key.image()
     ))?;
 
     let res = HTTP_CLIENT.get(url).send().await?;
@@ -208,19 +210,12 @@ async fn start_poll_upstream(
 async fn handle_cache_miss(
     req: &HttpRequest,
     gs: &Arc<GlobalState>,
-    (chap_hash, image, saver): (&str, &str, bool),
+    key: ImageKey,
 ) -> HttpResponse {
     // poll upstream, finding the total time of the request
     let res = {
         let timer = Timer::start();
-        let res = start_poll_upstream(
-            req,
-            &gs.backend,
-            if saver { "data-saver" } else { "data" },
-            chap_hash,
-            image,
-        )
-        .await;
+        let res = start_poll_upstream(req, &gs.backend, &key).await;
         log::debug!("upstream TTFB: {}ms", timer.elapsed());
         res
     };
@@ -243,7 +238,7 @@ async fn handle_cache_miss(
     }
 
     // create the chunk stream
-    let chunked = ChunkedUpstreamPoll::new(res.stream, res.size_hint);
+    let chunked = ChunkedUpstreamPoll::new(gs, key, res.stream, res.size_hint);
 
     // proxy the image to the client
     HttpResponse::Ok()

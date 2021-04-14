@@ -143,7 +143,7 @@ impl std::error::Error for NoUpstreamError {}
 /// A structure that includes all of the data needed to stream a response back to the client.
 struct UpstreamResponse {
     stream: Box<UpstreamStream>,
-    size_hint: usize,
+    size_hint: Option<usize>,
 
     status: StatusCode,
     content_type: mime_guess::Mime,
@@ -191,7 +191,7 @@ async fn start_poll_upstream(
         .and_then(|x| HttpDate::from_str(x).ok())
         .unwrap_or_else(|| HttpDate::from(time::SystemTime::now()));
 
-    let size_hint = res.content_length().map(|x| x as usize).unwrap_or(0);
+    let size_hint = res.content_length().map(|x| x as usize);
     Ok(UpstreamResponse {
         stream: Box::new(res.bytes_stream()),
         size_hint,
@@ -238,12 +238,16 @@ async fn handle_cache_miss(
     }
 
     // create the chunk stream
-    let chunked = ChunkedUpstreamPoll::new(gs, key, res.stream, res.size_hint);
+    let chunked = ChunkedUpstreamPoll::new(gs, key, res.stream, res.size_hint.unwrap_or(0));
 
     // proxy the image to the client
-    HttpResponse::Ok()
+    let mut http_res = HttpResponse::Ok();
+    http_res
         .append_header(header::ContentType(res.content_type))
         .append_header(header::LastModified(res.last_modified))
-        .append_header(("X-Cache", "MISS"))
-        .streaming(chunked)
+        .append_header(("X-Cache", "MISS"));
+    if let Some(size_hint) = res.size_hint {
+        http_res.append_header(("Content-Length", size_hint));
+    }
+    http_res.streaming(chunked)
 }

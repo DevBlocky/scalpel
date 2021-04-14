@@ -2,7 +2,7 @@ use crate::backend::TLSPayload;
 use crate::constants as c;
 use crate::GlobalState;
 use actix_web::{
-    dev, error, http, middleware, web, App, HttpRequest, HttpResponse, HttpServer, ResponseError,
+    dev, error, http, middleware, web, App, HttpRequest, HttpResponse, HttpServer,
     Result as WebResult,
 };
 use openssl::ssl;
@@ -66,7 +66,7 @@ async fn md_service(
             // there was an error with the token, so transform into response and return
             Some(Err(e)) => {
                 log::warn!("({}) error verifying token in URL ({})", peer_addr, e);
-                return Ok(e.error_response());
+                return Err(e.into());
             }
 
             // no token was even provided, so just say request is unauthorized

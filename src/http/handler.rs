@@ -163,14 +163,18 @@ async fn start_poll_upstream(
 ) -> Result<UpstreamResponse, Box<dyn std::error::Error>> {
     use std::str::FromStr;
 
-    let upstream = backend.get_upstream().ok_or(NoUpstreamError)?;
-    let url = reqwest::Url::parse(&format!(
-        "{}/{}/{}/{}",
-        &upstream,
-        key.archive_name(),
-        key.chapter(),
-        key.image()
-    ))?;
+    let url = {
+        let upstream = backend.get_upstream().ok_or(NoUpstreamError)?;
+        let base_url = reqwest::Url::parse(&upstream)?;
+        reqwest::Url::options()
+            .base_url(Some(&base_url))
+            .parse(&format!(
+                "{}/{}/{}",
+                key.archive_name(),
+                key.chapter(),
+                key.image()
+            ))?
+    };
 
     let res = HTTP_CLIENT.get(url).send().await?;
     let status = res.status();

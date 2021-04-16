@@ -35,7 +35,6 @@ dependencies = [
  "brotli2",
  "bytes",
  "bytestring",
- "cookie",
  "derive_more",
  "encoding_rs",
  "flate2",
@@ -450,17 +449,6 @@ name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
-
-[[package]]
-name = "cookie"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03a5d7b21829bc7b4bf4754a978a241ae54ea55a40f92bb20216e54096f4b951"
-dependencies = [
- "percent-encoding",
- "time 0.2.26",
- "version_check",
-]
 
 [[package]]
 name = "core-foundation"

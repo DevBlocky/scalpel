@@ -36,11 +36,14 @@ struct Application {
 /// This function will panic if the configured cache engine is invalid or wrong, or if there is a
 /// problem creating the cache implementation.
 fn create_dyn_cache(config: &config::AppConfig) -> Box<dyn cache::ImageCache> {
-    Box::new(match config.cache_engine.as_str() {
-        "rocksdb" => cache::RocksCache::new(&config.rocks_opt)
-            .expect("unable to initialize RocksDB cache engine"),
+    match config.cache_engine.as_str() {
+        #[cfg(feature = "ce-rocksdb")]
+        "rocksdb" => Box::new(
+            cache::RocksCache::new(&config.rocks_opt)
+                .expect("unable to initialize RocksDB cache engine"),
+        ),
         a => panic!("\"{}\" is not a valid cache engine", a),
-    })
+    }
 }
 
 impl Application {

@@ -4,7 +4,9 @@ use bytes::Bytes;
 // re-export different caches
 // mod fs;
 // pub use fs::FileSystemCache;
+#[cfg(feature = "ce-rocksdb")]
 mod rocks;
+#[cfg(feature = "ce-rocksdb")]
 pub use rocks::RocksCache;
 
 /// A basic type representing an image in cache. First value represents the bytes and second value

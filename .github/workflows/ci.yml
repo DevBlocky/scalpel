@@ -1,50 +1,137 @@
 on: [push]
-name: ci
+name: CI
 env:
     CI: 1
 
 jobs:
-    build-release:
+    lint:
         runs-on: ubuntu-latest
+        name: Lint ${{ matrix.build }}
+
+        strategy:
+            matrix:
+                build: [format, clippy]
+                include:
+                    - build: format
+                      components: rustfmt
+                      cargo_cmd: fmt
+                      cargo_args: -- --check
+                    - build: clippy
+                      components: rustfmt
+                      cargo_cmd: clippy
+
         steps:
             - uses: actions/checkout@v2
 
-            - name: install rust
+            - name: Install Rust
               uses: actions-rs/toolchain@v1
               with:
-                  toolchain: stable
+                  toolchain: ${{ matrix.rust || 'stable' }}
                   profile: minimal
+                  components: ${{ matrix.components }}
 
-            - name: cache LLVM
+            # cache and install llvm
+            - name: Cache LLVM
               id: cache-llvm
               uses: actions/cache@v2
               with:
                   path: ${{ runner.temp }}/llvm
                   key: llvm-11
-            - name: install LLVM
+            - name: Install LLVM
               uses: KyleMayes/install-llvm-action@v1
               with:
                   version: "11.1"
                   directory: ${{ runner.temp }}/llvm
                   cached: ${{ steps.cache-llvm.outputs.cache-hit }}
-            
-            # cache rust dependency/build directories
-            - name: cache cargo
+
+            # cache target directory
+            - name: Cache Target
               uses: actions/cache@v2
               with:
                   path: |
                       ~/.cargo/registry
-                      ~/.cargo/git
-                  key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-            - name: cache target
+                      target
+                  key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+            # cache rust dependency/build directories
+            - name: Lint ${{ matrix.build }}
+              uses: actions-rs/cargo@v1
+              with:
+                  command: ${{ matrix.cargo_cmd }}
+                  args: ${{ matrix.cargo_args }}
+
+    test:
+        name: Test
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: Install Rust
+              uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: stable
+                  profile: minimal
+
+            # cache and install llvm
+            - name: Cache LLVM
+              id: cache-llvm
               uses: actions/cache@v2
               with:
-                  path: target
-                  key: ${{ runner.os }}-build-target-${{ hashFiles('**/Cargo.lock') }}
+                  path: ${{ runner.temp }}/llvm
+                  key: llvm-11
+            - name: Install LLVM
+              uses: KyleMayes/install-llvm-action@v1
+              with:
+                  version: "11.1"
+                  directory: ${{ runner.temp }}/llvm
+                  cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
-            - run: cargo test
-            - run: cargo build --release
+            # cache target directory
+            - name: Cache Target
+              uses: actions/cache@v2
+              with:
+                  path: |
+                      ~/.cargo/registry
+                      target
+                  key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
 
+            - name: Test
+              uses: actions-rs/cargo@v1
+              with:
+                  command: test
+
+    build:
+        name: Build
+        needs: [lint, test]
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: Install Rust
+              uses: actions-rs/toolchain@v1
+              with:
+                  toolchain: stable
+                  profile: minimal
+
+            # cache and install llvm
+            - name: Cache LLVM
+              id: cache-llvm
+              uses: actions/cache@v2
+              with:
+                  path: ${{ runner.temp }}/llvm
+                  key: llvm-11
+            - name: Install LLVM
+              uses: KyleMayes/install-llvm-action@v1
+              with:
+                  version: "11.1"
+                  directory: ${{ runner.temp }}/llvm
+                  cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+
+            - name: Build Release
+              uses: actions-rs/cargo@v1
+              with:
+                  command: build
+                  args: --release
             - uses: actions/upload-artifact@v2
               with:
                   name: ${{ runner.os }}-scalpel

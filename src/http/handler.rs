@@ -250,8 +250,5 @@ async fn handle_cache_miss(
         .append_header(header::ContentType(res.content_type))
         .append_header(header::LastModified(res.last_modified))
         .append_header(("X-Cache", "MISS"));
-    if let Some(size_hint) = res.size_hint {
-        http_res.append_header(("Content-Length", size_hint));
-    }
     http_res.streaming(chunked)
 }

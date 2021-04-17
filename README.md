@@ -38,6 +38,7 @@ know how to use it, then you should probably stick to using the official client 
 - Customizable TLS setup
 - Battletested & Fast Cache Engine (with compression!1!)
 - HTTP Gzip Support
+- Better streaming of cache `MISS`es
 - Pretty Console Logging
 - Support for JSON & YAML configurations
 - Docker Support / Builds
@@ -47,7 +48,6 @@ know how to use it, then you should probably stick to using the official client 
 - Prometheus / VictoriaMetrics
 - More Cache Engines (like plain filesystem or MongoDB)
 - Non-hardcoded Configuration Path
-- Better streaming of cache `MISS`es
 
 ## Getting Started
 

@@ -68,7 +68,7 @@ fn is_browser_cached(req: &HttpRequest, etag: &header::EntityTag) -> bool {
 fn mime_from_request(req: &HttpRequest) -> mime_guess::Mime {
     mime_guess::from_path(req.path())
         .first()
-        .unwrap_or_else(|| mime_guess::mime::IMAGE_PNG)
+        .unwrap_or(mime_guess::mime::IMAGE_PNG)
 }
 
 /// Handles a cache HIT, returning an HttpResponse that represents that data of the cached image

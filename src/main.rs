@@ -98,7 +98,7 @@ impl Application {
     /// certificate and whether this ssl certificate is new
     async fn ping_backend(
         &self,
-    ) -> Result<Option<backend::TLSPayload>, Box<dyn std::error::Error>> {
+    ) -> Result<Option<backend::TlsPayload>, Box<dyn std::error::Error>> {
         // perform the ping on the backend server
         let (crt, token_key) = self.gs.backend.ping().await?;
 

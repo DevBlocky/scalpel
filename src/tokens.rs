@@ -180,8 +180,7 @@ impl TokenVerifier {
         let cipher_bytes = &token[NONCE_SIZE..];
 
         // convert nonce into box_::Nonce
-        let nonce =
-            box_::Nonce::from_slice(nonce_bytes).ok_or_else(|| TokenError::NonceMalformed)?;
+        let nonce = box_::Nonce::from_slice(nonce_bytes).ok_or(TokenError::NonceMalformed)?;
 
         Ok((nonce, Vec::from(cipher_bytes)))
     }

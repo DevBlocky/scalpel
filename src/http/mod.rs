@@ -1,4 +1,4 @@
-use crate::backend::TLSPayload;
+use crate::backend::TlsPayload;
 use crate::constants as c;
 use crate::GlobalState;
 use actix_web::{
@@ -162,7 +162,7 @@ fn spawn_http_server(
 
     server
         .bind_openssl(&bind_addr, acceptor)
-        .map_err(|x| PortBindError(x))
+        .map_err(PortBindError)
         .map(|s| s.run())
 }
 
@@ -196,13 +196,13 @@ impl HttpServerLifecycle {
     ///
     /// This will take the certificate it should use and the current global state and return a new
     /// instance of `Self` if successful. Errors will be propagated up the stack.
-    pub fn new(gs: Arc<GlobalState>, cert: &TLSPayload) -> Result<Self, Error> {
+    pub fn new(gs: Arc<GlobalState>, cert: &TlsPayload) -> Result<Self, Error> {
         // configures the SSL certificate with OpenSSL
         let acceptor = Self::cert_payload_to_acceptor(cert, gs.config.enforce_secure_tls)
-            .map_err(|e| Error::Acceptor(e))?;
+            .map_err(Error::Acceptor)?;
 
         // spawn the HTTP server and begin accepting requests
-        let srv = spawn_http_server(Arc::clone(&gs), acceptor).map_err(|e| Error::Port(e))?;
+        let srv = spawn_http_server(Arc::clone(&gs), acceptor).map_err(Error::Port)?;
 
         Ok(Self { gs, actix: srv })
     }
@@ -211,15 +211,15 @@ impl HttpServerLifecycle {
     /// fullchain certificate and private key for SSL.
     // NOTE: Unfortunately, there is no way (to my knowledge) to change SSL cert while the Actix
     // Web server is running, therefore it must be shutdown and respawned
-    pub async fn respawn_with_new_cert(&mut self, cert: &TLSPayload) -> Result<(), Error> {
+    pub async fn respawn_with_new_cert(&mut self, cert: &TlsPayload) -> Result<(), Error> {
         // stop old server immediately. if this were graceful, it would wait for all keep-alive
         // connections to close off first.
         self.shutdown(false).await;
 
         let acceptor = Self::cert_payload_to_acceptor(cert, self.gs.config.enforce_secure_tls)
-            .map_err(|e| Error::Acceptor(e))?;
+            .map_err(Error::Acceptor)?;
 
-        let srv = spawn_http_server(Arc::clone(&self.gs), acceptor).map_err(|e| Error::Port(e))?;
+        let srv = spawn_http_server(Arc::clone(&self.gs), acceptor).map_err(Error::Port)?;
         self.actix = srv;
 
         Ok(())
@@ -227,7 +227,7 @@ impl HttpServerLifecycle {
 
     /// Converts a [`TLSPayload`] into an Ssl Builder that ActixWeb will use for TLS
     fn cert_payload_to_acceptor(
-        cert: &TLSPayload,
+        cert: &TlsPayload,
         secure_tls: bool,
     ) -> Result<ssl::SslAcceptorBuilder, ssl::Error> {
         use openssl::pkey::PKey;

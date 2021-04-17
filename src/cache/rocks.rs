@@ -148,12 +148,12 @@ impl RocksCache {
         // convert data into entry, then serialize into bytes
         let entry = {
             let entry = ImageEntry::from(data);
-            bincode::serialize(&entry).map_err(|e| CacheError::Bincode(e))?
+            bincode::serialize(&entry).map_err(CacheError::Bincode)?
         };
 
         self.db
             .put_cf(image_cf, key, entry)
-            .map_err(|e| CacheError::Rocks(e))
+            .map_err(CacheError::Rocks)
     }
 
     /// Loads the bytes of an image and the timestamp it was originally saved from the database
@@ -170,15 +170,13 @@ impl RocksCache {
         let db_bytes = {
             let image_cf = self.get_image_cf();
             let key = Self::get_cache_key(chap_hash, image, saver);
-            self.db
-                .get_cf(image_cf, key)
-                .map_err(|e| CacheError::Rocks(e))?
+            self.db.get_cf(image_cf, key).map_err(CacheError::Rocks)?
         };
 
         // return saved bytes as Vec unless get_cf was unsuccessful
         Ok(if let Some(serialized_bytes) = db_bytes {
             let entry = bincode::deserialize::<ImageEntry>(&serialized_bytes)
-                .map_err(|e| CacheError::Bincode(e))?;
+                .map_err(CacheError::Bincode)?;
 
             // convert the image entry checksum into a unique identifier, used as the ETag for the
             // image. this is essentially just the hash representation of the image bytes.
@@ -194,7 +192,7 @@ impl RocksCache {
         self.db
             .live_files()
             .map(|x| x.iter().fold(0u64, |acc, lf| acc + lf.size as u64))
-            .map_err(|e| CacheError::Rocks(e))
+            .map_err(CacheError::Rocks)
     }
 
     /// Deletes the first entry in the images database, returning the number of bytes deleted.
@@ -211,7 +209,7 @@ impl RocksCache {
 
         // try to delete entry then return the number of bytes removed if successful
         Ok(if let Some((key, value)) = item {
-            self.db.delete(key).map_err(|e| CacheError::Rocks(e))?;
+            self.db.delete(key).map_err(CacheError::Rocks)?;
             Some(value.len())
         } else {
             None

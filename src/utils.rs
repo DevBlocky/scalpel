@@ -2,10 +2,10 @@
 
 /// Constants that describe the MD@Home rust client
 pub mod constants {
-    pub const PROG_NAME: &'static str = "Scalpel MD@Home";
+    pub const PROG_NAME: &str = "Scalpel MD@Home";
     pub const SPEC: u16 = 30;
-    pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-    pub const REPO_URL: &'static str = env!("CARGO_PKG_REPOSITORY");
+    pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+    pub const REPO_URL: &str = env!("CARGO_PKG_REPOSITORY");
 }
 
 use std::time;

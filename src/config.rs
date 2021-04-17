@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::fs;
 
 /// Global application configuration
@@ -72,7 +72,7 @@ impl AppConfig {
     ///
     /// How the file is parsed is determined by the extension of the file, i.e. *.yaml will be
     /// parsed using a yaml parser, *.json will be parsed using a json parser.
-    async fn read_and_parse_file(path: &PathBuf) -> Result<Self, ConfigError> {
+    async fn read_and_parse_file(path: &Path) -> Result<Self, ConfigError> {
         // find the extension of the file we're going to open. the extension of the file determines
         // the method in which we parse, i.e. "yaml" would be parsed as a YAML configuration file.
         let ext = path.extension().and_then(|e| e.to_str());
@@ -81,11 +81,11 @@ impl AppConfig {
         match (fs::read_to_string(path).await, ext) {
             // successfully read a yaml file
             (Ok(content), Some("yaml")) => {
-                serde_yaml::from_str(&content).map_err(|e| ConfigError::YamlParseError(e))
+                serde_yaml::from_str(&content).map_err(ConfigError::YamlParseError)
             }
             // successfully read a json file
             (Ok(content), Some("json")) => {
-                serde_json::from_str(&content).map_err(|e| ConfigError::JsonParseError(e))
+                serde_json::from_str(&content).map_err(ConfigError::JsonParseError)
             }
 
             // there was some sort of error reading the file so log as warning and continue

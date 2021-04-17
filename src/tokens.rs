@@ -1,4 +1,4 @@
-use actix_web::{http::StatusCode, HttpResponse, ResponseError};
+use actix_web::{body::Body, http::StatusCode, BaseHttpResponse as Response, ResponseError};
 use serde_json as json;
 use sodiumoxide::{base64, crypto::box_};
 use std::{error::Error, fmt};
@@ -45,8 +45,8 @@ impl fmt::Display for TokenError {
 }
 impl Error for TokenError {}
 impl ResponseError for TokenError {
-    fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status_code())
+    fn error_response(&self) -> Response<Body> {
+        Response::build(self.status_code())
             .body(format!("error validating provided token ({})", self))
     }
 

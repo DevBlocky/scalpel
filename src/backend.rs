@@ -28,11 +28,11 @@ struct PingResponse {
     compromised: bool,
     paused: bool,
     force_tokens: bool,
-    tls: Option<TLSPayload>,
+    tls: Option<TlsPayload>,
 }
 #[derive(Clone, serde::Deserialize)]
 #[allow(dead_code)]
-pub struct TLSPayload {
+pub struct TlsPayload {
     pub(crate) created_at: String,
     pub(crate) private_key: String,
     pub(crate) certificate: String,
@@ -40,7 +40,7 @@ pub struct TLSPayload {
 
 // custom fmt::Debug implementation so that when debug printing PingResponse it won't print data
 // that wouldn't make any sense
-impl std::fmt::Debug for TLSPayload {
+impl std::fmt::Debug for TlsPayload {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TLSPayload")
             .field("created_at", &self.created_at)
@@ -83,7 +83,7 @@ pub struct Backend {
 
     verify_tokens: atomic::AtomicBool,
     upstream_url: RwLock<Option<String>>,
-    tls: RwLock<Option<TLSPayload>>,
+    tls: RwLock<Option<TlsPayload>>,
     token_key: RwLock<Option<String>>,
 }
 
@@ -117,7 +117,7 @@ impl Backend {
     /// will unwrap all `RwLock`s that it is writing to or reading from
     pub async fn ping(
         &self,
-    ) -> Result<(Option<TLSPayload>, Option<String>), Box<dyn std::error::Error>> {
+    ) -> Result<(Option<TlsPayload>, Option<String>), Box<dyn std::error::Error>> {
         // structure JSON request using configuration
         let payload = {
             // unlock RwLock to get the last created_at

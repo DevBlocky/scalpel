@@ -3,14 +3,17 @@ name = "scalpel"
 repository = "https://github.com/blockba5her/scalpel"
 homepage = "https://github.com/blockba5her/scalpel"
 edition = "2018"
-version = "0.2.0"
+version = "0.2.2"
 authors = ["Jacob Parker <blocckba5her@gmail.com>"]
 description = "Yet another unofficial MD@Home client implementation"
 readme = "README.md"
 license = "MIT"
 
+[features]
+default = ["ce-rocksdb"]
+ce-rocksdb = ["rocksdb"]
+
 [dependencies]
-actix-web = {version = "4.0.0-beta.5", features = ["openssl"]}
 ctrlc = {version = "3.1.8", features = ["termination"]}
 reqwest = {version = "0.11.2", features = ["json", "stream"]}
 bytes = {version = "1.0.1", features = ["serde"]}
@@ -34,9 +37,15 @@ lazy_static = "1.4.0"
 version = "1.4.0"
 features = ["rt", "rt-multi-thread", "macros", "fs", "io-util", "time"]
 
+[dependencies.actix-web]
+version = "4.0.0-beta.5"
+default-features = false
+features = ["openssl", "compress"]
+
 [dependencies.rocksdb]
 version = "0.15.0"
 default-features = false
+optional = true
 features = ["zstd"]
 
 [profile.release]

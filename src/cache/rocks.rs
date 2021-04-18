@@ -3,6 +3,7 @@
 //! Just as a warning, this was written by someone who has never used RocksDB, so some things
 //! probably aren't right (most likely the compaction part).
 
+use super::ImageKey;
 use crate::config::RocksConfig;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -220,22 +221,22 @@ impl RocksCache {
 // For the comments on this trait impl and the functions within, please look at `super::ImageCache`!
 #[async_trait]
 impl super::ImageCache for RocksCache {
-    async fn load(&self, chap_hash: &str, image: &str, saver: bool) -> Option<super::ImageEntry> {
-        self.load_from_db(chap_hash, image, saver)
+    async fn load(&self, key: &ImageKey) -> Option<super::ImageEntry> {
+        self.load_from_db(key.chapter(), key.image(), key.data_saver())
             // log any errors that may occur
             .map_err(|e| {
-                log::error!("db load error: {:?} (for {}/{})", e, chap_hash, image);
+                log::error!("db load error: {:?} (for {})", e, key);
                 e
             })
             .ok()
             .and_then(|x| x)
     }
 
-    async fn save(&self, chap_hash: &str, image: &str, saver: bool, data: Bytes) -> bool {
-        self.save_to_db(chap_hash, image, saver, data)
+    async fn save(&self, key: &ImageKey, data: Bytes) -> bool {
+        self.save_to_db(key.chapter(), key.image(), key.data_saver(), data)
             // log any errors that may occur
             .map_err(|e| {
-                log::error!("db save error: {:?} (for {}/{})", e, chap_hash, image);
+                log::error!("db save error: {:?} (for {})", e, key);
                 e
             })
             .is_ok()

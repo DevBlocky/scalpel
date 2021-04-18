@@ -3,7 +3,9 @@
 //! Module will handle HIT or MISS images by calling DB. On HIT, will simply stream the image, and
 //! on MISS, will download the image from upstream, save it, then stream it.
 
+use super::chunked::{ChunkedUpstreamPoll, UpstreamStream};
 use crate::backend::Backend;
+use crate::cache::ImageKey;
 use crate::utils::Timer;
 use crate::GlobalState;
 use actix_web::{
@@ -15,7 +17,6 @@ use actix_web::{
     },
     HttpRequest, HttpResponse,
 };
-use bytes::Bytes;
 use lazy_static::lazy_static;
 use std::sync::Arc;
 use std::time;
@@ -26,12 +27,12 @@ pub(super) async fn response_from_cache(
     uid: &str, // unique-id that represents the request (used for logging)
     req: &HttpRequest,
     gs: &Arc<GlobalState>,
-    (chap_hash, image, saver): (&str, &str, bool),
+    key: ImageKey,
 ) -> HttpResponse {
     // attempt to load image from cache (timing response times)
     let cache_hit = {
         let timer = Timer::start();
-        let cache_hit = gs.cache.load(chap_hash, image, saver).await;
+        let cache_hit = gs.cache.load(&key).await;
         log::debug!("({}) cache lookup in {}ms", uid, timer.elapsed());
         cache_hit
     };
@@ -41,7 +42,7 @@ pub(super) async fn response_from_cache(
         handle_cache_hit(req, cache_hit, gs.config.gzip_compress)
     } else {
         // the result was not found in cache, aka MISS
-        handle_cache_miss(req, gs, (chap_hash, image, saver)).await
+        handle_cache_miss(req, gs, key).await
     }
 }
 
@@ -142,33 +143,41 @@ impl std::fmt::Display for NoUpstreamError {
 }
 impl std::error::Error for NoUpstreamError {}
 
-/// A structure that includes bytes of the upstream response and headers that should be forwarded
-/// for the proxy
+/// A structure that includes all of the data needed to stream a response back to the client.
 struct UpstreamResponse {
+    stream: Box<UpstreamStream>,
+    size_hint: Option<usize>,
+
     status: StatusCode,
     content_type: mime_guess::Mime,
     last_modified: HttpDate,
-    bytes: Bytes,
 }
 
-/// Polls upstream for the image request for the cache MISS.
+/// Starts a connection with the upstream server with the request resource.
 ///
-/// This will return the headers that need to be forwarded (required by spec) and the bytes that
-/// represent the image.
-async fn poll_upstream(
+/// This will return the required headers to stream back to the client as well as the stream of
+/// bytes representing the body of the request.
+///
+/// This function will return on first byte received
+async fn start_poll_upstream(
     req: &HttpRequest,
     backend: &Backend,
-    archive_type: &str,
-    chap_hash: &str,
-    image: &str,
+    key: &ImageKey,
 ) -> Result<UpstreamResponse, Box<dyn std::error::Error>> {
     use std::str::FromStr;
 
-    let upstream = backend.get_upstream().ok_or(NoUpstreamError)?;
-    let url = reqwest::Url::parse(&format!(
-        "{}/{}/{}/{}",
-        &upstream, archive_type, chap_hash, image
-    ))?;
+    let url = {
+        let upstream = backend.get_upstream().ok_or(NoUpstreamError)?;
+        let base_url = reqwest::Url::parse(&upstream)?;
+        reqwest::Url::options()
+            .base_url(Some(&base_url))
+            .parse(&format!(
+                "{}/{}/{}",
+                key.archive_name(),
+                key.chapter(),
+                key.image()
+            ))?
+    };
 
     let res = HTTP_CLIENT.get(url).send().await?;
     let status = res.status();
@@ -189,37 +198,32 @@ async fn poll_upstream(
         .and_then(|x| HttpDate::from_str(x).ok())
         .unwrap_or_else(|| HttpDate::from(time::SystemTime::now()));
 
-    let bytes = res.bytes().await?;
+    let size_hint = res.content_length().map(|x| x as usize);
     Ok(UpstreamResponse {
+        stream: Box::new(res.bytes_stream()),
+        size_hint,
+
         status,
-        bytes,
         content_type,
         last_modified,
     })
 }
 
-/// Handles a cache MISS, polling upstream for the image, saving it to the database, and streaming
-/// it to the user
+/// Handles a cache MISS by requesting the image from the upstream and streaming the image to the
+/// user using [`ChunkedUpstreamPoll`]
 ///
-/// If polling from upstream fails, then it will automatically return 503 BAD GATEWAY to the user
-/// with the error as the body. If cache fails saving, it will stream the image to the user anyways.
+/// If polling from upstream fails, then it will automatically return 502 BAD GATEWAY to the user
+/// with the error as the body.
 async fn handle_cache_miss(
     req: &HttpRequest,
     gs: &Arc<GlobalState>,
-    (chap_hash, image, saver): (&str, &str, bool),
+    key: ImageKey,
 ) -> HttpResponse {
     // poll upstream, finding the total time of the request
     let res = {
         let timer = Timer::start();
-        let res = poll_upstream(
-            req,
-            &gs.backend,
-            if saver { "data-saver" } else { "data" },
-            chap_hash,
-            image,
-        )
-        .await;
-        log::debug!("poll upstream time: {}ms", timer.elapsed());
+        let res = start_poll_upstream(req, &gs.backend, &key).await;
+        log::debug!("upstream TTFB: {}ms", timer.elapsed());
         res
     };
     // handle any errors that happen with res
@@ -240,25 +244,14 @@ async fn handle_cache_miss(
         }
     }
 
-    // save the image to the cache
-    {
-        let timer = Timer::start();
-        if !gs
-            .cache
-            .save(chap_hash, image, saver, Bytes::clone(&res.bytes))
-            .await
-        {
-            log::warn!(
-                "error saving upstream to cache, hopefully there was some more info on this!"
-            );
-        }
-        log::debug!("save to cache time: {}ms", timer.elapsed());
-    }
+    // create the chunk stream
+    let chunked = ChunkedUpstreamPoll::new(gs, key, res.stream, res.size_hint.unwrap_or(0));
 
     // proxy the image to the client
-    HttpResponse::Ok()
+    let mut http_res = HttpResponse::Ok();
+    http_res
         .append_header(header::ContentType(res.content_type))
         .append_header(header::LastModified(res.last_modified))
-        .append_header(("X-Cache", "MISS"))
-        .body(res.bytes)
+        .append_header(("X-Cache", "MISS"));
+    http_res.streaming(chunked)
 }

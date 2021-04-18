@@ -1,3 +1,4 @@
+use crate::cache::ImageKey;
 use crate::backend::TlsPayload;
 use crate::constants as c;
 use crate::GlobalState;
@@ -9,6 +10,7 @@ use openssl::ssl;
 use std::io;
 use std::sync::{atomic, Arc};
 
+mod chunked;
 mod handler;
 
 #[derive(serde::Deserialize)]
@@ -79,10 +81,8 @@ async fn md_service(
     gs.request_counter.fetch_add(1, atomic::Ordering::Relaxed);
 
     // respond using CacheResponder, which will handle cache HITs and MISSes
-    Ok(
-        handler::response_from_cache(&peer_addr, &req, &gs, (&path.chap_hash, &path.image, saver))
-            .await,
-    )
+    let cache_key = ImageKey::from_str_like(&path.chap_hash, &path.image, saver);
+    Ok(handler::response_from_cache(&peer_addr, &req, &gs, cache_key).await)
 }
 
 /// Represents an error the HTTP error can cause where there is some io error binding to the port

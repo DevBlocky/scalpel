@@ -17,7 +17,6 @@ ce-rocksdb = ["rocksdb"]
 ctrlc = {version = "3.1.8", features = ["termination"]}
 reqwest = {version = "0.11.2", features = ["json", "stream"]}
 bytes = {version = "1.0.1", features = ["serde"]}
-mime_guess = "2.0.3"
 serde = "1.0.125"
 serde_json = "1.0.64"
 serde_yaml = "0.8.17"
@@ -32,6 +31,7 @@ futures = "0.3.13"
 openssl = "0.10.33"
 hex = "0.4.3"
 lazy_static = "1.4.0"
+mime = "0.3.16"
 
 [dependencies.tokio]
 version = "1.4.0"

@@ -17,13 +17,14 @@ pub(super) struct ChunkedUpstreamPoll {
     gs: Arc<GlobalState>,
     upstream: Pin<Box<UpstreamStream>>,
     agg: BytesMut,
-    cache_key: Arc<ImageKey>,
+    cache_info: Arc<(ImageKey, mime::Mime)>,
 }
 
 impl ChunkedUpstreamPoll {
     pub(super) fn new(
         gs: &Arc<GlobalState>,
         key: ImageKey,
+        mime_type: mime::Mime,
         stream: Box<UpstreamStream>,
         size_hint: usize,
     ) -> Self {
@@ -31,7 +32,7 @@ impl ChunkedUpstreamPoll {
             gs: Arc::clone(gs),
             upstream: Pin::new(stream),
             agg: BytesMut::with_capacity(size_hint),
-            cache_key: Arc::new(key),
+            cache_info: Arc::new((key, mime_type)),
         }
     }
 }
@@ -77,9 +78,10 @@ impl Drop for ChunkedUpstreamPoll {
     fn drop(&mut self) {
         let bytes = std::mem::take(&mut self.agg).freeze();
         let gs = Arc::clone(&self.gs);
-        let key = Arc::clone(&self.cache_key);
+        let cache_info = Arc::clone(&self.cache_info);
         tokio::spawn(async move {
-            gs.cache.save(&key, bytes).await;
+            let (key, mime) = cache_info.as_ref();
+            gs.cache.save(key, mime.to_string(), bytes).await;
         });
     }
 }

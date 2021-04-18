@@ -3,43 +3,11 @@
 //! Just as a warning, this was written by someone who has never used RocksDB, so some things
 //! probably aren't right (most likely the compaction part).
 
-use super::ImageKey;
+use super::{ImageEntry, ImageKey, Md5Bytes};
 use crate::config::RocksConfig;
 use async_trait::async_trait;
 use bytes::Bytes;
-use std::time;
-
-/// Type alias that is meant to represent an array of bytes of an MD5 hash
-type Md5Bytes = [u8; 16];
-
-/// Computes an md5 checksum from a slice of bytes
-fn make_checksum(bytes: &[u8]) -> Md5Bytes {
-    md5::compute(bytes).into()
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-struct ImageEntry {
-    /// Milliseconds since UNIX_EPOCH since this entry has been put into the database
-    put_time: u128,
-    /// Checksum bytes used to verify the bytes that make up the image
-    checksum: Md5Bytes,
-
-    /// The bytes that make up the image
-    bytes: Bytes,
-}
-
-impl From<Bytes> for ImageEntry {
-    fn from(bytes: Bytes) -> Self {
-        Self {
-            put_time: time::SystemTime::now()
-                .duration_since(time::UNIX_EPOCH)
-                .map(|x| x.as_millis())
-                .unwrap_or_default(),
-            checksum: make_checksum(&bytes),
-            bytes,
-        }
-    }
-}
+use std::convert::TryInto;
 
 /// Cache implementation for an on-disk RocksDB cache
 pub struct RocksCache {
@@ -114,11 +82,11 @@ impl RocksCache {
     ///
     /// Essentially calculates the md5 hash of the chapter hash and image name together, taking
     /// into account if the image is data-saver
-    fn get_cache_key(chap_hash: &str, image: &str, saver: bool) -> Md5Bytes {
+    fn get_cache_key(key: &ImageKey) -> Md5Bytes {
         let mut ctx = md5::Context::new();
-        ctx.consume([saver as u8]);
-        ctx.consume(chap_hash);
-        ctx.consume(image);
+        ctx.consume([key.data_saver() as u8]);
+        ctx.consume(key.chapter());
+        ctx.consume(key.image());
         ctx.compute().into()
     }
 
@@ -138,18 +106,17 @@ impl RocksCache {
     /// on load and shrinking the database by oldest
     pub fn save_to_db(
         &self,
-        chap_hash: &str,
-        image: &str,
-        saver: bool,
+        key: &ImageKey,
+        mime_type: String,
         data: Bytes,
     ) -> Result<(), CacheError> {
         let image_cf = self.get_image_cf();
-        let key = Self::get_cache_key(chap_hash, image, saver);
+        let key = Self::get_cache_key(key);
 
         // convert data into entry, then serialize into bytes
-        let entry = {
-            let entry = ImageEntry::from(data);
-            bincode::serialize(&entry).map_err(CacheError::Bincode)?
+        let entry: Bytes = {
+            let entry = ImageEntry::new_assume(data, mime_type);
+            entry.try_into().map_err(CacheError::Bincode)?
         };
 
         self.db
@@ -161,28 +128,21 @@ impl RocksCache {
     /// that correspond to the chapter, image, and archive type provided.
     ///
     /// Result provides if any errors happen, and Option provides if the key matched.
-    pub fn load_from_db(
-        &self,
-        chap_hash: &str,
-        image: &str,
-        saver: bool,
-    ) -> Result<Option<super::ImageEntry>, CacheError> {
-        // find the bytes in the database
+    pub fn load_from_db(&self, key: &ImageKey) -> Result<Option<super::ImageEntry>, CacheError> {
+        // find the bytes in the database (converting Vec<u8> to Bytes)
         let db_bytes = {
             let image_cf = self.get_image_cf();
-            let key = Self::get_cache_key(chap_hash, image, saver);
-            self.db.get_cf(image_cf, key).map_err(CacheError::Rocks)?
+            let key = Self::get_cache_key(key);
+            self.db
+                .get_cf(image_cf, key)
+                .map_err(CacheError::Rocks)?
+                .map(Bytes::from)
         };
 
         // return saved bytes as Vec unless get_cf was unsuccessful
-        Ok(if let Some(serialized_bytes) = db_bytes {
-            let entry = bincode::deserialize::<ImageEntry>(&serialized_bytes)
-                .map_err(CacheError::Bincode)?;
-
-            // convert the image entry checksum into a unique identifier, used as the ETag for the
-            // image. this is essentially just the hash representation of the image bytes.
-            let uid = hex::encode(&entry.checksum);
-            Some((entry.bytes, uid))
+        Ok(if let Some(db_bytes) = db_bytes {
+            let entry: ImageEntry = db_bytes.try_into().map_err(CacheError::Bincode)?;
+            Some(entry)
         } else {
             None
         })
@@ -221,8 +181,8 @@ impl RocksCache {
 // For the comments on this trait impl and the functions within, please look at `super::ImageCache`!
 #[async_trait]
 impl super::ImageCache for RocksCache {
-    async fn load(&self, key: &ImageKey) -> Option<super::ImageEntry> {
-        self.load_from_db(key.chapter(), key.image(), key.data_saver())
+    async fn load(&self, key: &ImageKey) -> Option<ImageEntry> {
+        self.load_from_db(key)
             // log any errors that may occur
             .map_err(|e| {
                 log::error!("db load error: {:?} (for {})", e, key);
@@ -232,8 +192,8 @@ impl super::ImageCache for RocksCache {
             .and_then(|x| x)
     }
 
-    async fn save(&self, key: &ImageKey, data: Bytes) -> bool {
-        self.save_to_db(key.chapter(), key.image(), key.data_saver(), data)
+    async fn save(&self, key: &ImageKey, mime_type: String, data: Bytes) -> bool {
+        self.save_to_db(key, mime_type, data)
             // log any errors that may occur
             .map_err(|e| {
                 log::error!("db save error: {:?} (for {})", e, key);

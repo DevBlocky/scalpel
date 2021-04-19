@@ -36,8 +36,22 @@ impl RocksCache {
     pub fn new(cfg: &RocksConfig) -> Result<Self, rocksdb::Error> {
         // create the column family for images
         let image_cf = {
+            // optimizations for the block layout
+            let mut block_opts = rocksdb::BlockBasedOptions::default();
+            block_opts.set_format_version(5);
+            // below is optimizations to the layout of the database
+            // notable features are bloom filters and LRU cache
+            block_opts.set_bloom_filter(10, false);
+            block_opts.set_block_size(16 * 1024);
+            block_opts.set_cache_index_and_filter_blocks(true);
+            block_opts.set_pin_l0_filter_and_index_blocks_in_cache(true);
+            block_opts.set_block_cache(
+                &rocksdb::Cache::new_lru_cache(32 * Self::MEBIBYTE).expect("huh?"),
+            );
+
             let mut cf_opts = rocksdb::Options::default();
             cf_opts.set_level_compaction_dynamic_level_bytes(true);
+            cf_opts.set_block_based_table_factory(&block_opts);
             rocksdb::ColumnFamilyDescriptor::new(Self::IMAGE_CF_NAME, cf_opts)
         };
 
@@ -73,6 +87,7 @@ impl RocksCache {
                 );
             }
             db_opts.set_write_buffer_size(cfg.write_buffer_size as usize * Self::MEBIBYTE); // increases RAM usage but also write speed
+            db_opts.set_bytes_per_sync(Self::MEBIBYTE as u64);
 
             /* tune reads */
             db_opts.set_optimize_filters_for_hits(true); // better read for random-access

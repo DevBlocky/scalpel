@@ -3,6 +3,7 @@ use bytes::Bytes;
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::time;
+use std::sync::Arc;
 
 // re-export different caches
 // mod fs;
@@ -12,24 +13,33 @@ mod rocks;
 #[cfg(feature = "ce-rocksdb")]
 pub use rocks::RocksCache;
 
+#[derive(Debug)]
+struct ImageKeyInner {
+    chapter: String,
+    image: String,
+    data_saver: bool,
+}
+
 /// A data structure that represents the three components of an image path:
 /// - The Chapter Hash
 /// - The Image Name
 /// - Whether it's `data` or `data-saver`
+///
+/// This data structure allows for shallow cloning that won't copy any actual memory
 #[derive(Debug, Clone)]
 pub struct ImageKey {
-    chapter: String,
-    image: String,
-    data_saver: bool,
+    inner: Arc<ImageKeyInner>
 }
 
 impl ImageKey {
     /// Creates a new [`ImageKey`] instance using the provided `String`s
     pub fn new(chapter: String, image: String, data_saver: bool) -> Self {
         Self {
-            chapter,
-            image,
-            data_saver,
+            inner: Arc::new(ImageKeyInner {
+                chapter,
+                image,
+                data_saver
+            })
         }
     }
 
@@ -49,17 +59,17 @@ impl ImageKey {
     /// Retrieves the chapter hash associated with the key
     #[inline]
     pub fn chapter(&self) -> &str {
-        &self.chapter
+        &self.inner.chapter
     }
     /// Retrieves the file associated with the key
     #[inline]
     pub fn image(&self) -> &str {
-        &self.image
+        &self.inner.image
     }
     /// Retrieves if the key is data saver or not
     #[inline]
     pub fn data_saver(&self) -> bool {
-        self.data_saver
+        self.inner.data_saver
     }
 
     /// Returns a string representation of `data_saver`

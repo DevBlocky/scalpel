@@ -8,16 +8,21 @@ use crate::config::RocksConfig;
 use async_trait::async_trait;
 use bytes::Bytes;
 use std::convert::TryInto;
+use std::sync::Arc;
 
 /// Cache implementation for an on-disk RocksDB cache
+///
+/// This structure allows for shallow copying that points to the same database
+#[derive(Clone)]
 pub struct RocksCache {
-    db: rocksdb::DB,
+    db: Arc<rocksdb::DB>,
 }
 
 #[derive(Debug)]
 pub enum CacheError {
     Rocks(rocksdb::Error),
     Bincode(bincode::Error),
+    Async(tokio::task::JoinError),
 }
 
 impl RocksCache {
@@ -75,7 +80,7 @@ impl RocksCache {
             rocksdb::DB::open_cf_descriptors(&db_opts, &cfg.path, vec![image_cf])?
         };
 
-        Ok(Self { db })
+        Ok(Self { db: Arc::new(db) })
     }
 
     /// Calculates a predicatable unqiue key for the chap_hash, image, saver combo
@@ -100,10 +105,7 @@ impl RocksCache {
             .unwrap()
     }
 
-    /// Saves an images bytes to the database along
-    ///
-    /// In addition, saves a checksum and the time it was put in the database for verifying bytes
-    /// on load and shrinking the database by oldest
+    /// Syncronously saves an image and additional information to the RocksDB database.
     pub fn save_to_db(
         &self,
         key: &ImageKey,
@@ -124,11 +126,34 @@ impl RocksCache {
             .map_err(CacheError::Rocks)
     }
 
+    /// Async version of [`save_to_db`]
+    ///
+    /// All work is pushed off to [`tokio`]'s task scheduler so this operation will be spawned on
+    /// another thread and won't block
+    pub async fn save_to_db_async(
+        &self,
+        key: &ImageKey,
+        mime_type: String,
+        data: Bytes,
+    ) -> Result<(), CacheError> {
+        // both copies are shallow, no memory is actually copied
+        let this = self.clone();
+        let key = key.clone();
+
+        // spawn a blocking task, which means this long DB op will be pushed off to tokio's task
+        // handler and executed on a different thread.
+        let result =
+            tokio::task::spawn_blocking(move || this.save_to_db(&key, mime_type, data)).await;
+
+        // map the error into the correct format and return
+        result.map_err(CacheError::Async).and_then(|x| x)
+    }
+
     /// Loads the bytes of an image and the timestamp it was originally saved from the database
     /// that correspond to the chapter, image, and archive type provided.
     ///
     /// Result provides if any errors happen, and Option provides if the key matched.
-    pub fn load_from_db(&self, key: &ImageKey) -> Result<Option<super::ImageEntry>, CacheError> {
+    pub fn load_from_db(&self, key: &ImageKey) -> Result<Option<ImageEntry>, CacheError> {
         // find the bytes in the database (converting Vec<u8> to Bytes)
         let db_bytes = {
             let image_cf = self.get_image_cf();
@@ -146,6 +171,26 @@ impl RocksCache {
         } else {
             None
         })
+    }
+
+    /// Async version of [`load_from_db`]
+    ///
+    /// All work is pushed off to [`tokio`]'s task scheduler so this operation will be spawned on
+    /// another thread and won't block
+    pub async fn load_from_db_async(
+        &self,
+        key: &ImageKey,
+    ) -> Result<Option<ImageEntry>, CacheError> {
+        // both copies are shallow, no memory is actually copied
+        let this = self.clone();
+        let key = key.clone();
+
+        // spawn a blocking task, which means this long DB op will be pushed off to tokio's task
+        // handler and executed on a different thread.
+        let result = tokio::task::spawn_blocking(move || this.load_from_db(&key)).await;
+
+        // map the error into the correct format and return
+        result.map_err(CacheError::Async).and_then(|x| x)
     }
 
     /// Approximate size of the database on the disk, according to RockDB's list of live files
@@ -182,24 +227,11 @@ impl RocksCache {
 #[async_trait]
 impl super::ImageCache for RocksCache {
     async fn load(&self, key: &ImageKey) -> Option<ImageEntry> {
-        self.load_from_db(key)
-            // log any errors that may occur
-            .map_err(|e| {
-                log::error!("db load error: {:?} (for {})", e, key);
-                e
-            })
-            .ok()
-            .and_then(|x| x)
+        self.load_from_db_async(key).await.ok().and_then(|x| x)
     }
 
     async fn save(&self, key: &ImageKey, mime_type: String, data: Bytes) -> bool {
-        self.save_to_db(key, mime_type, data)
-            // log any errors that may occur
-            .map_err(|e| {
-                log::error!("db save error: {:?} (for {})", e, key);
-                e
-            })
-            .is_ok()
+        self.save_to_db_async(key, mime_type, data).await.is_ok()
     }
 
     fn report(&self) -> u64 {

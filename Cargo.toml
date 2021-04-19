@@ -46,7 +46,7 @@ features = ["openssl", "compress"]
 version = "0.15.0"
 default-features = false
 optional = true
-features = ["zstd"]
+features = []
 
 [profile.release]
 opt-level = 3

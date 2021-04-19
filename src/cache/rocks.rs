@@ -39,15 +39,15 @@ impl RocksCache {
             // optimizations for the block layout
             let mut block_opts = rocksdb::BlockBasedOptions::default();
             block_opts.set_format_version(5);
-            // below is optimizations to the layout of the database
+            // below are optimizations to the layout of the database
             // notable features are bloom filters and LRU cache
             block_opts.set_bloom_filter(10, false);
+            if let Ok(lru) = rocksdb::Cache::new_lru_cache(32 * Self::MEBIBYTE) {
+                block_opts.set_block_cache(&lru);
+            }
             block_opts.set_block_size(16 * 1024);
             block_opts.set_cache_index_and_filter_blocks(true);
             block_opts.set_pin_l0_filter_and_index_blocks_in_cache(true);
-            block_opts.set_block_cache(
-                &rocksdb::Cache::new_lru_cache(32 * Self::MEBIBYTE).expect("huh?"),
-            );
 
             let mut cf_opts = rocksdb::Options::default();
             cf_opts.set_level_compaction_dynamic_level_bytes(true);
@@ -60,31 +60,20 @@ impl RocksCache {
             let mut db_opts = rocksdb::Options::default();
             db_opts.create_if_missing(true);
             db_opts.create_missing_column_families(true);
-            db_opts.set_compression_type(if cfg.zstd_compression {
-                rocksdb::DBCompressionType::Zstd
-            } else {
-                rocksdb::DBCompressionType::None
-            });
+            db_opts.set_compression_type(rocksdb::DBCompressionType::None);
             db_opts.set_keep_log_file_num(15);
 
             /* set num background threads */
-            db_opts.increase_parallelism(cfg.parallelism as i32);
+            db_opts.increase_parallelism(cfg.parallelism);
 
             /* tune compactions */
-            db_opts.set_compaction_style(rocksdb::DBCompactionStyle::Level);
             db_opts.set_compaction_readahead_size(8 * Self::MEBIBYTE); // 8MiB, docs say recommended for HDDs
-            if cfg.optimize_compaction {
-                db_opts.optimize_level_style_compaction(512 * Self::MEBIBYTE); // No clue what this does, but it's recommended for large datasets
-            }
+            db_opts.optimize_level_style_compaction(512 * Self::MEBIBYTE); // No clue what this does, but it's recommended for large datasets
 
             /* tune writes */
-            if cfg.write_rate_limit > 0 {
-                // enable cfg rate limiter if it's above 0
-                db_opts.set_ratelimiter(
-                    (cfg.write_rate_limit * Self::MEBIBYTE) as i64,
-                    100_000,
-                    10,
-                );
+            if let Some(wrl) = cfg.write_rate_limit {
+                // enable cfg rate limiter if it's enabled
+                db_opts.set_ratelimiter((wrl * Self::MEBIBYTE) as i64, 100_000, 10);
             }
             db_opts.set_write_buffer_size(cfg.write_buffer_size as usize * Self::MEBIBYTE); // increases RAM usage but also write speed
             db_opts.set_bytes_per_sync(Self::MEBIBYTE as u64);

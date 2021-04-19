@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
-use std::time;
 use std::sync::Arc;
+use std::time;
 
 // re-export different caches
 // mod fs;
@@ -28,7 +28,7 @@ struct ImageKeyInner {
 /// This data structure allows for shallow cloning that won't copy any actual memory
 #[derive(Debug, Clone)]
 pub struct ImageKey {
-    inner: Arc<ImageKeyInner>
+    inner: Arc<ImageKeyInner>,
 }
 
 impl ImageKey {
@@ -38,8 +38,8 @@ impl ImageKey {
             inner: Arc::new(ImageKeyInner {
                 chapter,
                 image,
-                data_saver
-            })
+                data_saver,
+            }),
         }
     }
 

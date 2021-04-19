@@ -17,7 +17,7 @@ ce-rocksdb = ["rocksdb"]
 ctrlc = {version = "3.1.8", features = ["termination"]}
 reqwest = {version = "0.11.2", features = ["json", "stream"]}
 bytes = {version = "1.0.1", features = ["serde"]}
-serde = "1.0.125"
+serde = {version = "1.0.125", features = ["derive"]}
 serde_json = "1.0.64"
 serde_yaml = "0.8.17"
 sodiumoxide = "0.2.6"

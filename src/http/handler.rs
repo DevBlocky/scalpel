@@ -42,7 +42,7 @@ pub(super) async fn response_from_cache(
         handle_cache_hit(req, cache_hit, gs.config.gzip_compress)
     } else {
         // the result was not found in cache, aka MISS
-        handle_cache_miss(req, gs, key).await
+        handle_cache_miss(gs, key).await
     }
 }
 
@@ -61,17 +61,6 @@ fn is_browser_cached(req: &HttpRequest, etag: &header::EntityTag) -> bool {
     }
 }
 
-/// Guesses the mime type of the request based on the request path
-///
-/// Uses the request path and the extension of the last portion of the path to guess the mime type
-/// of the request using `mime-guess`. If it can't determine the mime type, it will default to
-/// image/png
-fn mime_from_request(req: &HttpRequest) -> mime_guess::Mime {
-    mime_guess::from_path(req.path())
-        .first()
-        .unwrap_or(mime_guess::mime::IMAGE_PNG)
-}
-
 /// Handles a cache HIT, returning an HttpResponse that represents that data of the cached image
 ///
 /// Sends the bytes of the cached image to the client unless the client has already proved that
@@ -79,19 +68,16 @@ fn mime_from_request(req: &HttpRequest) -> mime_guess::Mime {
 /// necessary headers (like `ETag` and `Vary`)
 fn handle_cache_hit(
     req: &HttpRequest,
-    (image_bytes, uid): crate::cache::ImageEntry,
+    image: crate::cache::ImageEntry,
     gzip: bool,
 ) -> HttpResponse {
-    // get the MIME type from the path
-    let mime = mime_from_request(req);
-
     // check whether the browser already has the image cached locally
-    let etag = header::EntityTag::strong(uid);
+    let etag = header::EntityTag::strong(image.get_checksum_hex());
     let is_client_cached = is_browser_cached(req, &etag);
 
     // create response object with headers that should be in every response
     let mut res = HttpResponse::build(StatusCode::OK);
-    res.append_header(header::ContentType(mime))
+    res.append_header(header::ContentType(image.get_mime()))
         .append_header(header::ETag(etag))
         .append_header(("Vary", "Accept-Encoding"))
         .append_header(("X-Cache", "HIT"));
@@ -117,7 +103,7 @@ fn handle_cache_hit(
     }
 
     // stream the data to the client
-    res.body(image_bytes)
+    res.body(image.get_bytes())
 }
 
 /* CACHE MISS HANDLER LOGIC BELOW */
@@ -149,7 +135,7 @@ struct UpstreamResponse {
     size_hint: Option<usize>,
 
     status: StatusCode,
-    content_type: mime_guess::Mime,
+    content_type: mime::Mime,
     last_modified: HttpDate,
 }
 
@@ -160,7 +146,6 @@ struct UpstreamResponse {
 ///
 /// This function will return on first byte received
 async fn start_poll_upstream(
-    req: &HttpRequest,
     backend: &Backend,
     key: &ImageKey,
 ) -> Result<UpstreamResponse, Box<dyn std::error::Error>> {
@@ -187,8 +172,10 @@ async fn start_poll_upstream(
         .headers()
         .get(header::CONTENT_TYPE)
         .and_then(|x| x.to_str().ok())
-        .and_then(|x| x.parse::<mime_guess::Mime>().ok())
-        .unwrap_or_else(|| mime_from_request(req));
+        .and_then(|x| x.parse::<mime::Mime>().ok())
+        // if this entire process fails for whatever reason, then just assume that the image is a
+        // PNG and move on with life
+        .unwrap_or(mime::IMAGE_PNG);
 
     // get the last modified date from upstream, or else just use now
     let last_modified = res
@@ -214,15 +201,11 @@ async fn start_poll_upstream(
 ///
 /// If polling from upstream fails, then it will automatically return 502 BAD GATEWAY to the user
 /// with the error as the body.
-async fn handle_cache_miss(
-    req: &HttpRequest,
-    gs: &Arc<GlobalState>,
-    key: ImageKey,
-) -> HttpResponse {
+async fn handle_cache_miss(gs: &Arc<GlobalState>, key: ImageKey) -> HttpResponse {
     // poll upstream, finding the total time of the request
     let res = {
         let timer = Timer::start();
-        let res = start_poll_upstream(req, &gs.backend, &key).await;
+        let res = start_poll_upstream(&gs.backend, &key).await;
         log::debug!("upstream TTFB: {}ms", timer.elapsed());
         res
     };
@@ -245,7 +228,13 @@ async fn handle_cache_miss(
     }
 
     // create the chunk stream
-    let chunked = ChunkedUpstreamPoll::new(gs, key, res.stream, res.size_hint.unwrap_or(0));
+    let chunked = ChunkedUpstreamPoll::new(
+        gs,
+        key,
+        res.content_type.clone(),
+        res.stream,
+        res.size_hint.unwrap_or(0),
+    );
 
     // proxy the image to the client
     let mut http_res = HttpResponse::Ok();

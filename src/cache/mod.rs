@@ -1,5 +1,8 @@
 use async_trait::async_trait;
 use bytes::Bytes;
+use std::convert::{TryFrom, TryInto};
+use std::str::FromStr;
+use std::time;
 
 // re-export different caches
 // mod fs;
@@ -82,9 +85,85 @@ impl std::fmt::Display for ImageKey {
     }
 }
 
-/// A basic type representing an image in cache. First value represents the bytes and second value
-/// represents an ETag (or unique identifier) for the image.
-pub type ImageEntry = (Bytes, String);
+type Md5Bytes = [u8; 16];
+/// A structure representing the data of an image in cache
+///
+/// This structure contains the data that makes up an image, with additional information included
+/// for HTTP responses. It includes:
+/// - Last Modified timestamp
+/// - A checksum
+/// - The mime type of the image
+/// - The bytes of the image itself
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct ImageEntry {
+    // milliseconds since epoch
+    last_modified: u128,
+    checksum: Md5Bytes,
+    mime_type: String,
+
+    bytes: Bytes,
+}
+
+impl ImageEntry {
+    pub fn new(bytes: Bytes, mime_type: String, last_modified: time::SystemTime) -> Self {
+        Self {
+            last_modified: last_modified
+                .duration_since(time::UNIX_EPOCH)
+                .map(|x| x.as_millis())
+                .unwrap_or_default(),
+            checksum: md5::compute(&bytes).into(),
+            mime_type,
+            bytes,
+        }
+    }
+
+    /// Creates a new Image Entry based on the `bytes` and `mime_type` given
+    ///
+    /// This procedure will essentially "fill in the gaps," per se, for the `checksum` and
+    /// `last_modified` parameters. Creating a new [`ImageEntry`] should only be done when saving a
+    /// cache entry, not when loading. Instead, serde deserialization should be used for loading.
+    #[inline]
+    pub fn new_assume(bytes: Bytes, mime_type: String) -> Self {
+        Self::new(bytes, mime_type, time::SystemTime::now())
+    }
+
+    /// Reference to the internal [`Bytes`] store
+    #[inline]
+    pub fn get_bytes(&self) -> Bytes {
+        self.bytes.clone()
+    }
+    /// Hexadecimal representation of the image checksum
+    #[inline]
+    pub fn get_checksum_hex(&self) -> String {
+        hex::encode(&self.checksum)
+    }
+
+    /// The stored [`Mime`](mime::Mime) type of the image. Defaults to `image/png` if somehow
+    /// corrupted or otherwise invalid.
+    #[inline]
+    pub fn get_mime(&self) -> mime::Mime {
+        mime::Mime::from_str(&self.mime_type).unwrap_or(mime::IMAGE_PNG)
+    }
+}
+
+impl TryInto<Bytes> for ImageEntry {
+    type Error = bincode::Error;
+
+    /// Serializes the datastructure into an array of bytes
+    fn try_into(self) -> Result<Bytes, Self::Error> {
+        // NOTE: converting from `Vec` to `Bytes` does not cause a Clone, so it is
+        // memory/performance efficient
+        bincode::serialize(&self).map(Bytes::from)
+    }
+}
+impl TryFrom<Bytes> for ImageEntry {
+    type Error = bincode::Error;
+
+    /// Deserializes the datastructure from an array of bytes
+    fn try_from(bytes: Bytes) -> Result<Self, Self::Error> {
+        bincode::deserialize(&bytes)
+    }
+}
 
 /// Trait for an MD@Home cache implementation.
 ///
@@ -102,12 +181,11 @@ pub type ImageEntry = (Bytes, String);
 /// [`Mutex`]: std::sync::Mutex
 #[async_trait]
 pub trait ImageCache: Send + Sync {
-    /// Load a cached image, returning a vector of bytes that represent the image and a timestamp
-    /// of the last time that image was modified.
+    /// Load a cached image, returning the [`ImageEntry`] structure that represents all of the data
+    /// associated with that image.
     ///
     /// Implementation should return None if the image is not cached or if there was an issue
-    /// loading the image, otherwise return the bytes that represent the image and the timestamp
-    /// that the image was saved.
+    /// loading the image, otherwise return the [`ImageEntry`] structure.
     ///
     /// Implementation should also focus on this being as efficient as possible, and to use async
     /// wherever possible, as this will be called frequently
@@ -119,9 +197,12 @@ pub trait ImageCache: Send + Sync {
     /// recommended for cache implementation to log if there was a problem as errors are not pushed
     /// up the stack.
     ///
+    /// Implementations are also recommended to save images in the [`ImageEntry`] format, as it can
+    /// be serialized and deserialized to bytes, and it is what the `load` function expects.
+    ///
     /// Implementation should also focus on this being as efficient as possible, and to use async
     /// wherever possible, as this can be called frequently
-    async fn save(&self, key: &ImageKey, data: Bytes) -> bool;
+    async fn save(&self, key: &ImageKey, mime_type: String, data: Bytes) -> bool;
 
     /// Reports the total size of the cache database in bytes.
     ///

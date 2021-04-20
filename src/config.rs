@@ -36,11 +36,19 @@ pub struct AppConfig {
 #[derive(Deserialize, Debug)]
 pub struct RocksConfig {
     pub path: String,
-    pub parallelism: u16,
-    pub zstd_compression: bool,
-    pub optimize_compaction: bool,
-    pub write_rate_limit: usize,
+    #[serde(default = "parallelism_default")]
+    pub parallelism: i32,
+    #[serde(default = "write_buf_sz_default")]
     pub write_buffer_size: usize,
+    pub write_rate_limit: Option<usize>,
+}
+#[inline]
+fn parallelism_default() -> i32 {
+    2
+}
+#[inline]
+fn write_buf_sz_default() -> usize {
+    64
 }
 
 /// Various different errors that could happen when opening or parsing a configuration file.

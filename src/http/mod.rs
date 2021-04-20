@@ -161,7 +161,7 @@ fn spawn_http_server(
     }
 
     server
-        .bind_openssl(&bind_addr, acceptor)
+        .bind(&bind_addr)
         .map_err(PortBindError)
         .map(|s| s.run())
 }

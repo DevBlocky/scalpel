@@ -244,11 +244,7 @@ impl Application {
     }
 }
 
-#[actix_web::main]
-async fn main() {
-    // init the logger with INFO level
-    env_logger::Builder::from_env(Env::default().default_filter_or("INFO")).init();
-
+async fn init() {
     // initialize sodiumoxide for thread safety
     sodiumoxide::init().expect("unable to initialize sodiumoxide");
 
@@ -269,4 +265,27 @@ async fn main() {
 
     let mut app = Application::new(config);
     app.run().await;
+}
+
+fn main() {
+    // init the logger with INFO level
+    env_logger::Builder::from_env(Env::default().default_filter_or("INFO")).init();
+
+    let max_bt: usize = std::env::var("TOKIO_MAX_BLOCKING_THREADS")
+        .unwrap_or_else(|_| "512".to_string())
+        .parse()
+        .expect("env parse error");
+    log::debug!("set tokio_max-blocking-threads: {}", max_bt);
+
+    // create acitx system with custom tokio runtime
+    log::debug!("bootstrapping tokio/actix runtime");
+    let rt = actix_web::rt::System::with_tokio_rt(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .max_blocking_threads(max_bt)
+            .enable_all()
+            .build()
+            .expect("build tokio runtime")
+    });
+
+    rt.block_on(init())
 }

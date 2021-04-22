@@ -114,17 +114,23 @@ impl Application {
     /// Shrinks the cache database if the reported size is above the maximum size in the config.
     /// Will log if an error occurs (but not the specific error) and the time it took.
     async fn try_shrink_db(&self) {
-        let db_sz = self.gs.cache.report();
-        let max_sz = self.gs.config.cache_size_mebibytes as u64 * 1024 * 1024;
+        // constant multipliers for cache threshold and shrink-to sizes
+        // SHRINK_MULT = multiplier to the maximum size after shrinking, if shrink was triggered
+        // MAX_MULT = multiplier to the max db size before triggering a shrink
+        const SHRINK_MULT: f64 = 0.9;
+        const MAX_MULT: f64 = 0.95;
+
+        let db_sz = self.gs.cache.report() as f64;
+        let max_sz = self.gs.config.cache_size_mebibytes as f64 * 1024f64 * 1024f64;
         log::warn!(
             "reported cache size: {:.2}MiB",
-            db_sz as f32 / 1024f32 / 1024f32
+            db_sz / 1024f64 / 1024f64
         );
         // shrink database if reported size is above the maximum size reported in the config
-        if db_sz > max_sz {
+        if db_sz > (max_sz * MAX_MULT) {
             log::warn!("database is over maximum size, shrinking...");
             let timer = utils::Timer::start();
-            match self.gs.cache.shrink(max_sz).await {
+            match self.gs.cache.shrink((max_sz * SHRINK_MULT) as u64).await {
                 Ok(new_sz) => log::warn!("db shrinked to size {}B", new_sz),
                 Err(_) => log::error!("problem shrinking database! hopefully there's more logs"),
             }

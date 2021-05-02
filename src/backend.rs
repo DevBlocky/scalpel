@@ -27,6 +27,7 @@ struct PingResponse {
     token_key: String,
     compromised: bool,
     paused: bool,
+    #[serde(default)]
     force_tokens: bool,
     tls: Option<TlsPayload>,
 }

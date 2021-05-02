@@ -122,10 +122,7 @@ impl Application {
 
         let db_sz = self.gs.cache.report() as f64;
         let max_sz = self.gs.config.cache_size_mebibytes as f64 * 1024f64 * 1024f64;
-        log::warn!(
-            "reported cache size: {:.2}MiB",
-            db_sz / 1024f64 / 1024f64
-        );
+        log::warn!("reported cache size: {:.2}MiB", db_sz / 1024f64 / 1024f64);
         // shrink database if reported size is above the maximum size reported in the config
         if db_sz > (max_sz * MAX_MULT) {
             log::warn!("database is over maximum size, shrinking...");

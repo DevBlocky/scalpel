@@ -127,7 +127,7 @@ impl Backend {
                 network_speed: self
                     .config
                     .external_max_speed
-                    .map(|x| x as u64 * 1024 / 8)
+                    .map(|x| x as u64 * 1000 / 8)
                     .unwrap_or(0),
                 build_version: c::SPEC,
                 ip_address: self.config.external_ip.clone(),

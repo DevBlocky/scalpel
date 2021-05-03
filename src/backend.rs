@@ -1,6 +1,6 @@
 use crate::config::AppConfig;
 use crate::utils::constants as c;
-use std::sync::{atomic, Arc, RwLock};
+use std::sync::{Arc, RwLock};
 
 // below are structures that represent JSON objects for passing messages to and from the server
 //
@@ -27,8 +27,6 @@ struct PingResponse {
     token_key: String,
     compromised: bool,
     paused: bool,
-    #[serde(default)]
-    force_tokens: bool,
     tls: Option<TlsPayload>,
 }
 #[derive(Clone, serde::Deserialize)]
@@ -82,7 +80,6 @@ pub struct Backend {
     config: Arc<AppConfig>,
     client: reqwest::Client,
 
-    verify_tokens: atomic::AtomicBool,
     upstream_url: RwLock<Option<String>>,
     tls: RwLock<Option<TlsPayload>>,
     token_key: RwLock<Option<String>>,
@@ -98,7 +95,6 @@ impl Backend {
             config,
             client: reqwest::Client::new(),
 
-            verify_tokens: atomic::AtomicBool::new(false),
             upstream_url: RwLock::new(None),
             tls: RwLock::new(None),
             token_key: RwLock::new(None),
@@ -187,10 +183,6 @@ impl Backend {
     ///
     /// Returns Some(token_key) if there is a new token key, otherwise None
     fn update_from_response(&self, res: &PingResponse) -> Option<String> {
-        // store whether we should verify tokens
-        self.verify_tokens
-            .store(res.force_tokens, atomic::Ordering::Relaxed);
-
         // store new tls_created_at because the server has determined we're using an outdated
         // version
         if let Some(ref tls) = res.tls {
@@ -256,11 +248,6 @@ impl Backend {
                 res.text().await.unwrap_or_else(|_| "NO BODY".to_string()),
             ))),
         }
-    }
-
-    /// Gets whether the client should verify tokens
-    pub fn get_verify_tokens(&self) -> bool {
-        self.verify_tokens.load(atomic::Ordering::Relaxed)
     }
 
     /// Returns the upstream url stored from the API. Returns `None` if there has been no

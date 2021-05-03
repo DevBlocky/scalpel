@@ -53,7 +53,7 @@ async fn md_service(
     let saver = path.archive_type == "data-saver";
 
     // verify the token provided in the request url if verify tokens is enabled
-    if !gs.config.skip_tokens && gs.backend.get_verify_tokens() {
+    if !gs.config.skip_tokens {
         // unlock verifier mutex
         let v = gs.verifier.read().unwrap();
 

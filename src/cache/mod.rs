@@ -6,8 +6,11 @@ use std::sync::Arc;
 use std::time;
 
 // re-export different caches
-// mod fs;
-// pub use fs::FileSystemCache;
+#[cfg(feature = "ce-filesystem")]
+mod fs;
+#[cfg(feature = "ce-filesystem")]
+pub use fs::FileSystemCache;
+
 #[cfg(feature = "ce-rocksdb")]
 mod rocks;
 #[cfg(feature = "ce-rocksdb")]
@@ -80,6 +83,18 @@ impl ImageKey {
         } else {
             "data"
         }
+    }
+
+    /// Calculates a predicatable unqiue key for the chap_hash, image, saver combo
+    ///
+    /// Essentially calculates the md5 hash of the chapter hash and image name together, taking
+    /// into account if the image is data-saver
+    pub fn as_bkey(&self) -> Md5Bytes {
+        let mut ctx = md5::Context::new();
+        ctx.consume([self.data_saver() as u8]);
+        ctx.consume(self.chapter());
+        ctx.consume(self.image());
+        ctx.compute().into()
     }
 }
 

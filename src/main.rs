@@ -35,12 +35,18 @@ struct Application {
 ///
 /// This function will panic if the configured cache engine is invalid or wrong, or if there is a
 /// problem creating the cache implementation.
-fn create_dyn_cache(config: &config::AppConfig) -> Box<dyn cache::ImageCache> {
+async fn create_dyn_cache(config: &config::AppConfig) -> Box<dyn cache::ImageCache> {
     match config.cache_engine.as_str() {
         #[cfg(feature = "ce-rocksdb")]
         "rocksdb" => Box::new(
             cache::RocksCache::new(&config.rocks_opt)
                 .expect("unable to initialize RocksDB cache engine"),
+        ),
+        #[cfg(feature = "ce-filesystem")]
+        "fs" => Box::new(
+            cache::FileSystemCache::new()
+                .await
+                .expect("unable to initialize fs cache engine"),
         ),
         a => panic!("\"{}\" is not a valid cache engine", a),
     }
@@ -49,7 +55,7 @@ fn create_dyn_cache(config: &config::AppConfig) -> Box<dyn cache::ImageCache> {
 impl Application {
     /// Creates a new Application based on a config, as well as starting the backend HTTP and
     /// pinging the backend.
-    fn new(config: config::AppConfig) -> Self {
+    async fn new(config: config::AppConfig) -> Self {
         // initialize the global state Arc
         let gs = {
             // place config into it's own Arc so it can be shared to other portions of the
@@ -62,7 +68,7 @@ impl Application {
 
             // may panic, but it's fine because it's before ping
             log::debug!("initializing cache...");
-            let cache = create_dyn_cache(&config);
+            let cache = create_dyn_cache(&config).await;
 
             // initialize the backend
             let backend = Backend::new(Arc::clone(&config));
@@ -266,7 +272,7 @@ async fn init() {
         panic!("cache size does not meet minimum requirements");
     }
 
-    let mut app = Application::new(config);
+    let mut app = Application::new(config).await;
     app.run().await;
 }
 

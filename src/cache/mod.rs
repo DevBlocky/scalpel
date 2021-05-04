@@ -43,19 +43,6 @@ impl ImageKey {
         }
     }
 
-    /// Converts `str`-like parameters into `String`s then creates the new structure
-    pub fn from_str_like<C: AsRef<str>, I: AsRef<str>>(
-        chapter: C,
-        image: I,
-        data_saver: bool,
-    ) -> Self {
-        Self::new(
-            String::from(chapter.as_ref()),
-            String::from(image.as_ref()),
-            data_saver,
-        )
-    }
-
     /// Retrieves the chapter hash associated with the key
     #[inline]
     pub fn chapter(&self) -> &str {

@@ -222,7 +222,12 @@ impl Application {
         // wait until there are no more requests coming in
         let start = time::Instant::now();
         let mut requests = self.get_num_requests();
+        let grace = self.gs.config.max_grace_period;
         loop {
+            // immediately stop graceful shutdown if configured
+            if grace < 0 {
+                break;
+            }
             tokio::time::sleep(time::Duration::from_secs(5)).await;
 
             // break if we've had no requests in the interval
@@ -232,10 +237,10 @@ impl Application {
             }
             requests = x;
 
-            let elapsed = start.elapsed().as_secs();
+            let elapsed = start.elapsed().as_secs() as i32;
             log::info!("waited for shutdown for {} seconds", elapsed);
             // break if we've waited for more seconds than the max grace period
-            if self.gs.config.max_grace_period > 0 && elapsed >= self.gs.config.max_grace_period {
+            if grace != 0 && elapsed >= grace {
                 break;
             }
         }

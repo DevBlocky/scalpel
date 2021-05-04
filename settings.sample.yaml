@@ -4,7 +4,9 @@
 client_secret: "YOUR CLIENT SECRET"
 
 # The max number of seconds that the graceful shutdown is allowed to take.
-# 0 would mean that graceful shutdown will take as long as it wants
+# <0 = Graceful shutdown will be skipped
+# =0 = Graceful shutdown will have no time limit
+# >0 = Is the maximum number of seconds graceful shutdowns can last
 max_grace_period: 60
 
 

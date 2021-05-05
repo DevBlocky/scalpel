@@ -1,4 +1,5 @@
 use super::{ImageCache, ImageEntry, ImageKey};
+use crate::config::FsConfig;
 use bytes::Bytes;
 use std::convert::TryInto;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -29,9 +30,9 @@ pub struct FileSystemCache {
 }
 
 impl FileSystemCache {
-    pub async fn new() -> Result<Self, CacheError> {
-        let cache = forceps::Cache::new("./cache")
-            .read_write_buffer(16 * 1024)
+    pub async fn new(config: &FsConfig) -> Result<Self, CacheError> {
+        let cache = forceps::Cache::new(&config.path)
+            .read_write_buffer(config.rw_buffer_size * 1024)
             .build()
             .await
             .map_err(CacheError::Forceps)?;

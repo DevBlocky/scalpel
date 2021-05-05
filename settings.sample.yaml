@@ -14,8 +14,18 @@ max_grace_period: 60
 # The minimum is 40GiB (40960), otherwise program will panic
 cache_size_mebibytes: 40960
 
-# Only "rocksdb" for now, in the future will include other engines
-cache_engine: rocksdb
+# "fs" = A basic filesystem cache that includes the essentials
+# "rocksdb" = The RocksDB-powered cache engine that is highly customizable
+cache_engine: fs
+
+# Configuration for the "fs" cache engine. Only required if engine is fs.
+fs_options:
+    # Self explanatory
+    path: ./cache
+    # KiB allocated for the in-memory read-write buffer
+    # This generally is a good number except for very specific workloads
+    # Default is 16KiB
+    #rw_buffer_size: 16
 
 # Configuration for "rocksdb" cache engine. Only required if engine is rocksdb
 rocksdb_options:
@@ -33,7 +43,6 @@ rocksdb_options:
     # use up more RAM in the process.
     # Default is off
     #write_rate_limit: 24
-
 
 
 ### HTTP CONFIGURATION ###

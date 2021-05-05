@@ -16,7 +16,9 @@ pub struct AppConfig {
     pub cache_size_mebibytes: u32,
     pub cache_engine: String,
     #[serde(rename = "rocksdb_options")]
-    pub rocks_opt: RocksConfig,
+    pub rocks_opt: Option<RocksConfig>,
+    #[serde(rename = "fs_options")]
+    pub fs_opt: Option<FsConfig>,
 
     // webserver settings
     pub port: u16,
@@ -36,19 +38,30 @@ pub struct AppConfig {
 #[derive(Deserialize, Debug)]
 pub struct RocksConfig {
     pub path: String,
-    #[serde(default = "parallelism_default")]
+    #[serde(default = "rocksce_parallelism")]
     pub parallelism: i32,
-    #[serde(default = "write_buf_sz_default")]
+    #[serde(default = "rocksce_write_buf_sz")]
     pub write_buffer_size: usize,
     pub write_rate_limit: Option<usize>,
 }
 #[inline]
-fn parallelism_default() -> i32 {
+fn rocksce_parallelism() -> i32 {
     2
 }
 #[inline]
-fn write_buf_sz_default() -> usize {
+fn rocksce_write_buf_sz() -> usize {
     64
+}
+
+/// Configuration for FileSystem cache engine
+#[derive(Deserialize, Debug)]
+pub struct FsConfig {
+    pub path: String,
+    #[serde(default = "fsce_rw_buf_sz")]
+    pub rw_buffer_size: usize,
+}
+fn fsce_rw_buf_sz() -> usize {
+    16
 }
 
 /// Various different errors that could happen when opening or parsing a configuration file.

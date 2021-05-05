@@ -33,20 +33,26 @@ struct Application {
 ///
 /// ## Panic
 ///
-/// This function will panic if the configured cache engine is invalid or wrong, or if there is a
-/// problem creating the cache implementation.
+/// This function will 100% of the time panic if there is a problem with the configuration of the
+/// cache engine, there is an error creating the cache engine itself, or if the provided name is
+/// invaid.
 async fn create_dyn_cache(config: &config::AppConfig) -> Box<dyn cache::ImageCache> {
     match config.cache_engine.as_str() {
-        #[cfg(feature = "ce-rocksdb")]
-        "rocksdb" => Box::new(
-            cache::RocksCache::new(&config.rocks_opt)
-                .expect("unable to initialize RocksDB cache engine"),
-        ),
         #[cfg(feature = "ce-filesystem")]
         "fs" => Box::new(
-            cache::FileSystemCache::new()
+            cache::FileSystemCache::new(config.fs_opt.as_ref().expect("fs ce config not provided"))
                 .await
                 .expect("unable to initialize fs cache engine"),
+        ),
+        #[cfg(feature = "ce-rocksdb")]
+        "rocksdb" => Box::new(
+            cache::RocksCache::new(
+                config
+                    .rocks_opt
+                    .as_ref()
+                    .expect("rocksdb ce config not provided"),
+            )
+            .expect("unable to initialize RocksDB cache engine"),
         ),
         a => panic!("\"{}\" is not a valid cache engine", a),
     }

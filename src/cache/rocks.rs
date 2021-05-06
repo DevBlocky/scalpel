@@ -3,7 +3,7 @@
 //! Just as a warning, this was written by someone who has never used RocksDB, so some things
 //! probably aren't right (most likely the compaction part).
 
-use super::{ImageEntry, ImageKey, Md5Bytes};
+use super::{ImageEntry, ImageKey};
 use crate::config::RocksConfig;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -87,18 +87,6 @@ impl RocksCache {
         Ok(Self { db: Arc::new(db) })
     }
 
-    /// Calculates a predicatable unqiue key for the chap_hash, image, saver combo
-    ///
-    /// Essentially calculates the md5 hash of the chapter hash and image name together, taking
-    /// into account if the image is data-saver
-    fn get_cache_key(key: &ImageKey) -> Md5Bytes {
-        let mut ctx = md5::Context::new();
-        ctx.consume([key.data_saver() as u8]);
-        ctx.consume(key.chapter());
-        ctx.consume(key.image());
-        ctx.compute().into()
-    }
-
     /// Function to get the ColumnFamily to store images in. Defaults to the default column family
     /// for the database if it's not found.
     fn get_image_cf(&self) -> &rocksdb::ColumnFamily {
@@ -117,7 +105,7 @@ impl RocksCache {
         data: Bytes,
     ) -> Result<(), CacheError> {
         let image_cf = self.get_image_cf();
-        let key = Self::get_cache_key(key);
+        let key = key.as_bkey();
 
         // convert data into entry, then serialize into bytes
         let entry: Bytes = {
@@ -161,7 +149,7 @@ impl RocksCache {
         // find the bytes in the database (converting Vec<u8> to Bytes)
         let db_bytes = {
             let image_cf = self.get_image_cf();
-            let key = Self::get_cache_key(key);
+            let key = key.as_bkey();
             self.db
                 .get_cf(image_cf, key)
                 .map_err(CacheError::Rocks)?

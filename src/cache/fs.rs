@@ -1,88 +1,153 @@
-//! This is incomplete, please look at `rocks.rs` instead
+use super::{ImageCache, ImageEntry, ImageKey};
+use crate::config::FsConfig;
+use bytes::Bytes;
+use std::convert::TryInto;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time;
 
-use super::ImageCache;
-use std::{io, path};
-use tokio::fs;
+/// Time since epoch in milliseconds
+#[inline]
+fn now_as_millis() -> u64 {
+    time::SystemTime::now()
+        .duration_since(time::UNIX_EPOCH)
+        .map(|x| x.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+#[derive(Debug)]
+pub enum CacheError {
+    Forceps(forceps::Error),
+    Bincode(bincode::Error),
+}
 
 pub struct FileSystemCache {
-    base: path::PathBuf
+    cache: forceps::Cache,
+
+    /// timestamp of last full size fetch (millis since epoch)
+    last_fetch: AtomicU64,
+    /// total db bytes counter
+    total: AtomicU64,
 }
 
 impl FileSystemCache {
-    /// Find the full path including the base directory of an image on the disk.
-    ///
-    /// **WARNING**: This does not verify that the image exists on the disk, it only specifies where
-    /// it should exist.
-    fn get_path(&self, chap_hash: &str, image: &str, saver: bool) -> path::PathBuf {
-        // find the chapter segment of the path
-        //
-        // Example: if chapter was "8172a46adc798f4f4ace6663322a383e" then the path would end up
-        // being "81/72/8172a46adc798f4f4ace6663322a383e/IMG.png"
-        let chap_path = format!("{}/{}/{}", &chap_hash[0..2], &chap_hash[2..4], chap_hash);
+    pub async fn new(config: &FsConfig) -> Result<Self, CacheError> {
+        let cache = forceps::Cache::new(&config.path)
+            .read_write_buffer(config.rw_buffer_size * 1024)
+            .build()
+            .await
+            .map_err(CacheError::Forceps)?;
 
-        // clone the base path then push relative path to image
-        let mut full_path = self.base.clone();
-        full_path.push(if saver {
-            format!("{}/saver-{}", chap_path, image)
-        } else {
-            format!("{}/{}", chap_path, image)
-        });
-        full_path
-    }
-
-    /// Create a new [`FileSystemCache`](Self) instance, automatically creating the path if it
-    /// doesn't exist in the meantime.
-    ///
-    /// This will fail if the base path provided is a file instead of a directory, or if there is
-    /// some other io Error (like an error reading metadata because of permission levels)
-    pub async fn new(base: impl AsRef<path::Path>) -> io::Result<Self> {
-        // find the metadata of the path, creating if it doesn't exist already
-        let meta = match fs::metadata(&base).await {
-            // metadata found, so immediately return that
-            Ok(m) => m,
-
-            Err(e) => match e.kind() {
-                // if folder not found, create it and refind metadata
-                io::ErrorKind::NotFound => {
-                    fs::create_dir_all(&base).await?;
-                    fs::metadata(&base).await?
-                }
-
-                // other errors are unexpected and can just pass up the stack
-                _ => return Err(e)
-            }
+        let s = Self {
+            cache,
+            last_fetch: AtomicU64::new(now_as_millis()),
+            total: AtomicU64::new(0),
         };
-
-        // if it's not a directory then return an error
-        // this error is the same as if you were to open try to open a file but it was actually a
-        // directory (at least on windows)
-        if !meta.is_dir() {
-            return Err(io::ErrorKind::PermissionDenied.into());
-        }
-
-        Ok(Self {
-            base: base.as_ref().into()
-        })
+        s.update_real_size();
+        Ok(s)
     }
 
-    pub async fn save_on_disk(&self, chap_hash: &str, image: &str, buf: &[u8]) -> io::Result<()> {
-        // TODO: don't hardcode saver
-        let path = self.get_path(chap_hash, image, false);
+    /// Updates the internally kept database total bytes counter to the actual database value. This
+    /// function is costly as it does an entire iteration over the database metadata.
+    fn update_real_size(&self) -> u64 {
+        let sz = self.cache.metadata_iter().fold(0u64, |acc, x| match x {
+            Ok((_, meta)) => acc + meta.get_size(),
+            _ => acc,
+        });
+        self.total.store(sz, Ordering::SeqCst);
+        sz
+    }
 
-        // create directory up to file if it doesn't exist
-        if let Some(p) = path.parent() {
-            fs::create_dir_all(p).await?;
+    /// Finds an estimated total size of the database. If a certain amount of time has passed, then
+    /// it will find the real size and update the internal counter.
+    fn find_size(&self) -> u64 {
+        // 1 hr in milliseconds
+        const MIN_TIME: u64 = 1000 * 60 * 60;
+        let last_fetch = self.last_fetch.load(Ordering::Relaxed);
+        let now = now_as_millis();
+
+        // if it's been over an hour since the last fetch, then fetch again and update `last_fetch`
+        // to the correct value
+        if now - last_fetch >= MIN_TIME {
+            self.update_real_size();
+            self.last_fetch.store(now, Ordering::SeqCst);
         }
 
-        let mut f = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open(path)
-            .await?;
+        self.total.load(Ordering::SeqCst)
+    }
 
-        use tokio::io::AsyncWriteExt;
-        f.write_all(buf).await?;
+    /// Reads an entry from the database based on the key provided
+    async fn read_from_db(&self, key: &ImageKey) -> Result<ImageEntry, CacheError> {
+        let bytes = self
+            .cache
+            .read(key.as_bkey())
+            .await
+            .map_err(CacheError::Forceps)?;
+        let e: ImageEntry = bytes.try_into().map_err(CacheError::Bincode)?;
+        Ok(e)
+    }
 
+    /// Writes an entry to the database and returns the error that occurs
+    async fn save_to_db(
+        &self,
+        key: &ImageKey,
+        mime_type: String,
+        data: Bytes,
+    ) -> Result<(), CacheError> {
+        let entry = ImageEntry::new_assume(data, mime_type);
+        let ser_bytes: Bytes = entry.try_into().map_err(CacheError::Bincode)?;
+        self.cache
+            .write(key.as_bkey(), &ser_bytes)
+            .await
+            .map_err(CacheError::Forceps)?;
+
+        // update the total size counter with the new storage value
+        self.total
+            .fetch_add(ser_bytes.len() as u64, Ordering::SeqCst);
         Ok(())
     }
 }
+
+#[async_trait::async_trait]
+impl ImageCache for FileSystemCache {
+    async fn load(&self, key: &ImageKey) -> Option<ImageEntry> {
+        let res = self.read_from_db(key).await;
+        match &res {
+            Err(CacheError::Forceps(forceps::Error::NotFound)) => {}
+            Err(e) => log::error!("error reading data from db: {}", e),
+            _ => {}
+        }
+        res.ok()
+    }
+    async fn save(&self, key: &ImageKey, mime_type: String, data: Bytes) -> bool {
+        if let Err(e) = self.save_to_db(key, mime_type, data).await {
+            log::error!("error writing data to db: {}", e);
+            false
+        } else {
+            true
+        }
+    }
+
+    fn report(&self) -> u64 {
+        self.find_size()
+    }
+
+    async fn shrink(&self, min: u64) -> Result<u64, ()> {
+        use forceps::evictors::FifoEvictor;
+
+        if let Err(e) = self.cache.evict_with(FifoEvictor::new(min)).await {
+            log::error!("error shrinking db occured: {}", CacheError::Forceps(e));
+            return Err(());
+        }
+        Ok(self.update_real_size())
+    }
+}
+
+impl std::fmt::Display for CacheError {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Forceps(e) => write!(fmt, "ce-filesystem/forceps - \"{}\"", e),
+            Self::Bincode(e) => write!(fmt, "ce-filesystem/bincode - \"{}\"", e),
+        }
+    }
+}
+impl std::error::Error for CacheError {}

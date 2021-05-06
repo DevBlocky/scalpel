@@ -1,5 +1,6 @@
+use arc_swap::ArcSwap;
 use env_logger::Env;
-use std::sync::{atomic, Arc, RwLock};
+use std::sync::{atomic, Arc};
 use std::time;
 
 mod backend;
@@ -18,7 +19,7 @@ pub use utils::constants;
 pub struct GlobalState {
     config: Arc<config::AppConfig>,
     cache: Box<dyn cache::ImageCache>,
-    verifier: RwLock<tokens::TokenVerifier>,
+    verifier: ArcSwap<tokens::TokenVerifier>,
     backend: Backend,
     request_counter: atomic::AtomicUsize,
 }
@@ -85,7 +86,7 @@ impl Application {
                 config,
                 cache,
                 backend,
-                verifier: RwLock::new(tokens::TokenVerifier::new()),
+                verifier: ArcSwap::from_pointee(tokens::TokenVerifier::new()),
                 request_counter: atomic::AtomicUsize::new(0),
             })
         };
@@ -116,7 +117,9 @@ impl Application {
 
         // update the token verifier with the new token_key
         if let Some(token_key) = &token_key {
-            self.gs.verifier.write().unwrap().push_key_b64(token_key)?;
+            let mut verifier = tokens::TokenVerifier::new();
+            verifier.push_key_b64(token_key)?;
+            self.gs.verifier.store(Arc::new(verifier));
         }
 
         // return certificate for HTTP server

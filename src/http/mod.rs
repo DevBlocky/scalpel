@@ -55,12 +55,12 @@ async fn md_service(
     // verify the token provided in the request url if verify tokens is enabled
     if !gs.config.skip_tokens {
         // unlock verifier mutex
-        let v = gs.verifier.read().unwrap();
+        let verifier = gs.verifier.load();
 
         match path
             .token
             .as_ref()
-            .map(|token| v.verify_url_token(token, &path.chap_hash))
+            .map(|token| verifier.verify_url_token(token, &path.chap_hash))
         {
             // result is good, so bypass
             Some(Ok(_)) => {}

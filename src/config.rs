@@ -8,7 +8,7 @@ use tokio::fs;
 pub struct AppConfig {
     // basic client configuration
     pub client_secret: String,
-    pub max_grace_period: u64,
+    pub max_grace_period: i32,
     #[serde(default)]
     pub skip_tokens: bool,
 

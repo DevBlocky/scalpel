@@ -93,7 +93,7 @@ impl TokenVerifier {
     /// variant.
     fn decode_b64(b64: &str, is_url_variant: bool) -> Result<Vec<u8>, TokenError> {
         let variant = if is_url_variant {
-            base64::Variant::UrlSafe
+            base64::Variant::UrlSafeNoPadding
         } else {
             base64::Variant::Original
         };
@@ -242,7 +242,7 @@ mod tests {
             // return base64 encoded data
             (
                 base64::encode(&self.their_p, base64::Variant::Original),
-                base64::encode(&token_bytes, base64::Variant::UrlSafe),
+                base64::encode(&token_bytes, base64::Variant::UrlSafeNoPadding),
             )
         }
     }
@@ -332,4 +332,19 @@ mod tests {
     }
 
     // Add more tests for edge cases
+    #[test]
+    fn url_no_padding() {
+        // valid token that would've failed for padded decoding
+        const TOKEN: &str = "N0HB-F-zgcHEV10spzfvhM3S9ByxYnc0A3kLNHtyxy4qukzVbFp9Yhsu4cMxcbBR_ru5oRpkK1pYXDlrfBQQB7MykGDKX3Ae8WJec5m79Jxzpxop2uFqCqoJZEXW_4IkyeQyIdPMFxnFDeSxRZnoRIkwj2tledTUPdDpVvPoTL6BJgm5dwQRLBNM56gBYGo";
+
+        let (token_key, _) = PCryptoData::new().key_token_pair(&[]);
+        let mut verifier = TokenVerifier::new();
+        verifier.push_key_b64(&token_key).unwrap();
+
+        // verify that there is no base64 decode error
+        match verifier.verify_url_token(TOKEN, "") {
+            Ok(_) => panic!("somehow an Ok Result"),
+            Err(e) => assert_eq!(e, TokenError::DecryptFailed),
+        }
+    }
 }

@@ -1,6 +1,6 @@
 use crate::config::AppConfig;
 use crate::utils::constants as c;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockReadGuard};
 
 // below are structures that represent JSON objects for passing messages to and from the server
 //
@@ -252,8 +252,7 @@ impl Backend {
 
     /// Returns the upstream url stored from the API. Returns `None` if there has been no
     /// successful ping yet, and `Some` containing the upstream URL as provided up the API.
-    pub fn get_upstream(&self) -> Option<String> {
-        let inner = self.upstream_url.read().unwrap();
-        inner.clone()
+    pub fn get_upstream(&self) -> RwLockReadGuard<Option<String>> {
+        self.upstream_url.read().unwrap()
     }
 }

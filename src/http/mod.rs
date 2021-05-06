@@ -81,7 +81,8 @@ async fn md_service(
     gs.request_counter.fetch_add(1, atomic::Ordering::Relaxed);
 
     // respond using CacheResponder, which will handle cache HITs and MISSes
-    let cache_key = ImageKey::from_str_like(&path.chap_hash, &path.image, saver);
+    let args = path.into_inner();
+    let cache_key = ImageKey::new(args.chap_hash, args.image, saver);
     Ok(handler::response_from_cache(&peer_addr, &req, &gs, cache_key).await)
 }
 

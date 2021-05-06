@@ -101,9 +101,25 @@ jobs:
                   command: test
 
     build:
-        name: Build
+        name: Build ${{ matrix.name }}
         needs: [lint, test]
         runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                name:
+                    - ce-filesystem
+                    - ce-rocksdb
+                    - all-features
+                include:
+                    - name: ce-filesystem
+                      build_flags: --features ce-filesystem
+                    - name: ce-rocksdb
+                      build_flags: --features ce-rocksdb
+                    - name: all-features
+                      build_flags: --all-features
+        env:
+            RUSTFLAGS: -C link-args=-s
+
         steps:
             - uses: actions/checkout@v2
 
@@ -131,10 +147,13 @@ jobs:
               uses: actions-rs/cargo@v1
               with:
                   command: build
-                  args: --release
+                  args: |
+                      --release
+                      --no-default-features
+                      ${{ matrix.build_flags || '' }}
             - uses: actions/upload-artifact@v2
               with:
-                  name: ${{ runner.os }}-scalpel
+                  name: scalpel-${{ matrix.name }}
                   path: target/release/scalpel*
 
 # TODO: Add build for windows systems

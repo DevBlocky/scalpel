@@ -36,7 +36,7 @@ know how to use it, then you should probably stick to using the official client 
 
 - Ultra Fast HTTP server
 - Customizable TLS setup
-- Battletested & Fast Cache Engine (with compression!1!)
+- Fast RocksDB & FileSystem cache engines
 - HTTP Gzip Support
 - Better streaming of cache `MISS`es
 - Pretty Console Logging
@@ -98,6 +98,18 @@ all of the required toolchain.
 4. In the same terminal, run `cargo build --release`
 5. Binary is located at `target/release/scalpel.exe`
 
+**Feature Gates**
+
+It is possible to change the cache engines included in the final build. By default, all engines
+are enabled by default, however you can disable them manually like so:
+
+```bash
+cargo build --release --no-default-features --features ce-filesystem
+```
+
+To see all of the possible feature gates, please see the \[features\] section of the
+[Cargo.toml](https://github.com/blockba5her/scalpel/blob/main/Cargo.toml) file.
+
 ## Configuration
 
 All configuration options for the client can be found in `settings.sample.yaml`. All settings are
@@ -121,8 +133,7 @@ change the `RUST_LOG` environment variable before starting the client. The accep
 
 The default and recommended client log level is `INFO`. For more info on changing log behavior, see
 [`env_logger` documentation](https://docs.rs/env_logger/0.8.3/env_logger/index.html). Example of
-changing the log level on linux:
-`RUST_LOG=DEBUG ./scalpel`
+changing the log level on linux: `RUST_LOG=DEBUG ./scalpel`
 
 ## Cache Engines
 
@@ -133,13 +144,24 @@ requirements mandated by the configuration file.
 Each cache engine implementation can be selected by changing the `cache_engine` configuration option
 to the one of the Engine Keys below. Most of the caches require additional settings.
 
+### FileSystem
+
+`cache_engine: fs`
+
+The FileSystem cache is a basic cache that will store files on the disk in a similar format to the
+Official Client, in a folder heirarchy where each file represents an image.
+
+To configure, change all options under the `fs_options` umbrella section in the configuration file.
+See `settings.sample.yaml` for documentation on each option. If you don't know what an option does,
+then you probably don't need to change it.
+
 ### RocksDB
 
 `cache_engine: rocksdb`
 
-Currently the only cache engine, [RocksDB](https://rocksdb.org/) is a battle-tested key-value storage
-system developed by Facebook. It's extremely fast and is used in many SQL databases like MySQL or
-MariaDB, and includes a whole heap of customizability for different applications.
+[RocksDB](https://rocksdb.org/) is a battle-tested key-value storage system developed by Facebook.
+It's extremely fast and is used in many SQL databases like MySQL or MariaDB, and includes a whole
+heap of customizability for different applications.
 
 To configure, change all options under the `rocksdb_options` umbrella section in the configuration
 file. See `settings.sample.yaml` for documentation on each option. If you don't know what an option

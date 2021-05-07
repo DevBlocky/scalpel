@@ -139,7 +139,11 @@ fn spawn_http_server(
                     .header("Access-Control-Allow-Origin", "https://mangadex.org")
                     .header("Access-Control-Expose-Headers", "*")
                     .header("Cache-Control", "public, max-age=1209600")
-                    .header("Timing-Allow-Origin", "https://mangadex.org"),
+                    .header("Timing-Allow-Origin", "https://mangadex.org")
+                    .header(
+                        "X-Robots-Tag",
+                        "noindex, noarchive, nosnippet, noimageindex",
+                    ),
             )
             .wrap(middleware::Compress::new(COMPRESS))
             // regular MD@Home routes

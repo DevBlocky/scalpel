@@ -131,7 +131,7 @@ fn spawn_http_server(
             .wrap(
                 middleware::DefaultHeaders::new()
                     // Advertisement Headers
-                    .header("Server", server_info.clone())
+                    .header("Server", &server_info)
                     .header("X-Powered-By", "Actix Web")
                     .header("X-Version", c::VERSION)
                     // Headers required by client spec
@@ -150,6 +150,9 @@ fn spawn_http_server(
             .route(
                 "/{archive_type}/{chap_hash}/{image}", // untokenized route
                 web::get().to(md_service),
+            )
+            .default_service(
+                web::route().to(|| HttpResponse::NotFound().body("no valid route found")),
             )
     })
     .keep_alive(gs.config.keep_alive)

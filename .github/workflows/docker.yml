@@ -19,7 +19,7 @@ jobs:
             - uses: crazy-max/ghaction-docker-meta@v2
               id: meta
               with:
-                  images: ghcr.io/blockba5her/scalpel
+                  images: ghcr.io/DevBlocky/scalpel
                   tags: |
                       type=ref,event=branch
                       type=ref,event=pr

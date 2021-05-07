@@ -66,7 +66,7 @@ and make sure to include your client secret, then start using:
 ### Docker Support
 
 Scalpel can be downloaded and run using a docker image on platforms that support docker. To get started
-using docker, see the [docker](https://github.com/blockba5her/scalpel/tree/main/docker) documentation.
+using docker, see the [docker](https://github.com/DevBlocky/scalpel/tree/main/docker) documentation.
 
 ### Building
 
@@ -107,8 +107,8 @@ are enabled by default, however you can disable them manually like so:
 cargo build --release --no-default-features --features ce-filesystem
 ```
 
-To see all of the possible feature gates, please see the \[features\] section of the
-[Cargo.toml](https://github.com/blockba5her/scalpel/blob/main/Cargo.toml) file.
+To see all of the possible feature gates, please see the `[features]` section of the
+[Cargo.toml](https://github.com/DevBlocky/scalpel/blob/main/Cargo.toml) file.
 
 ## Configuration
 

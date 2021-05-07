@@ -1,7 +1,7 @@
 [package]
 name = "scalpel"
-repository = "https://github.com/blockba5her/scalpel"
-homepage = "https://github.com/blockba5her/scalpel"
+repository = "https://github.com/DevBlocky/scalpel"
+homepage = "https://github.com/DevBlocky/scalpel"
 edition = "2018"
 version = "0.4.1"
 authors = ["Jacob Parker <blocckba5her@gmail.com>"]
@@ -49,7 +49,7 @@ default-features = false
 optional = true
 
 [dependencies.forceps]
-git = "https://github.com/blockba5her/forceps"
+git = "https://github.com/DevBlocky/forceps"
 branch = "main"
 optional = true
 

@@ -584,7 +584,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 [[package]]
 name = "forceps"
 version = "0.2.1"
-source = "git+https://github.com/blockba5her/forceps?branch=main#19ff90283c63acdc39a2d3a9d81c9c9fca829071"
+source = "git+https://github.com/DevBlocky/forceps?branch=main#19ff90283c63acdc39a2d3a9d81c9c9fca829071"
 dependencies = [
  "async-trait",
  "bson",

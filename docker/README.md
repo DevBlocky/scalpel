@@ -5,7 +5,7 @@ To get started, see the [Running Standalone](#running-standalone) or [Docker Com
 sections for the setup that you would like to run.
 
 All docker images for this repository are published to the
-[GitHub Container Registry](https://github.com/users/blockba5her/packages/container/package/scalpel).
+[GitHub Container Registry](https://github.com/users/DevBlocky/packages/container/package/scalpel).
 
 
 ## Running Standalone
@@ -15,12 +15,12 @@ run it using docker compose instead.
 
 - Make sure [Docker](https://www.docker.com/get-started) is installed on your system
 - Open a terminal or command prompt
-- Find the latest version at the [package](https://github.com/users/blockba5her/packages/container/scalpel/versions)
+- Find the latest version at the [package](https://github.com/users/DevBlocky/packages/container/scalpel/versions)
   page. **DON'T** use the `main` version, it might be unstable!
-- Download the image using `docker pull ghcr.io/blockba5her/scalpel:<version>`, replacing `<version>`
+- Download the image using `docker pull ghcr.io/DevBlocky/scalpel:<version>`, replacing `<version>`
   with the verion you want.
 - `cd` to the directory you want to run the container in
-- Copy the repo's [`settings.sample.yaml`](https://github.com/blockba5her/scalpel/blob/main/settings.sample.yaml)
+- Copy the repo's [`settings.sample.yaml`](https://github.com/DevBlocky/scalpel/blob/main/settings.sample.yaml)
   file to that directory as `settings.yaml` and edit
 - Use one of the following commands to run:
 
@@ -42,12 +42,12 @@ This is how to run the Scalpel client with docker and docker compose.
 
 - Make sure [Docker](https://www.docker.com/get-started) and
   [Docker Compose](https://docs.docker.com/compose/install/) are installed on your system
-- Copy the [`docker-compose.yml`](https://github.com/blockba5her/scalpel/blob/main/docker/docker-compose.yml)
+- Copy the [`docker-compose.yml`](https://github.com/DevBlocky/scalpel/blob/main/docker/docker-compose.yml)
   file to an empty folder on your machine
 - Change `{version}` in `docker-compose.yml` to the latest version on the
-  [package](https://github.com/users/blockba5her/packages/container/scalpel/versions) page. **DON'T**
+  [package](https://github.com/users/DevBlocky/packages/container/scalpel/versions) page. **DON'T**
   use the `main` version, it might be unstable!
-- Copy the repo's [`settings.sample.yaml`](https://github.com/blockba5her/scalpel/blob/main/settings.sample.yaml)
+- Copy the repo's [`settings.sample.yaml`](https://github.com/DevBlocky/scalpel/blob/main/settings.sample.yaml)
   file to that directory as `settings.yaml` and edit
 - Use the following commands to run:
 
@@ -66,7 +66,7 @@ Docker images for Scalpel are automatically built when new code is pushed to the
 when a new version is released (new tag is created) for the repository. All docker images will be
 published to `ghcr.io/blockba5her/scalpel:tag`. The different tags are listed below.
 
-Please see the [package](https://github.com/users/blockba5her/packages/container/package/scalpel) page
+Please see the [package](https://github.com/users/DevBlocky/packages/container/package/scalpel) page
 for info on all versions currently released.
 
 ### Official Release Tags

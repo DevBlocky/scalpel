@@ -76,6 +76,23 @@ keep_alive: 30
 enforce_secure_tls: false
 
 
+### PROMETHEUS CONFIGURATION ###
+
+# Below is where you can customize the histogram buckets for some of the prometheus metrics
+# The program comes with predefined buckets, but they might not fit your system
+prometheus:
+    # Buckets for the 'cache_latency' histogram (in milliseconds)
+    #cache_latency_buckets: [
+    #    0.1,
+    #    0.2
+    #]
+    # Buckets for the 'request_duration' histogram (in milliseconds)
+    #request_duration_buckets: [
+    #    0.1,
+    #    0.2
+    #]
+
+
 ### PING/EXTERNAL CONFIGURATION ###
 
 # An IPv4 address sent to the backend that represents this client. Only enable this if you have to.

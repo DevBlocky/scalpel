@@ -6,6 +6,7 @@ mod backend;
 mod cache;
 mod config;
 mod http;
+mod metrics;
 mod tokens;
 mod utils;
 
@@ -21,6 +22,7 @@ pub struct GlobalState {
     verifier: RwLock<tokens::TokenVerifier>,
     backend: Backend,
     request_counter: atomic::AtomicUsize,
+    metrics: metrics::Metrics,
 }
 
 /// Structure dedciated to holding MD@Home Rust lifetime logic
@@ -71,6 +73,8 @@ impl Application {
             // structure and it wouldn't be wise to cyclically refer back to `GlobalState` inside
             // of the backend module
             let config = Arc::new(config);
+            let metrics = metrics::Metrics::new(config.prom_opt.clone().unwrap_or_default())
+                .expect("metrics intialize");
 
             // may panic, but it's fine because it's before ping
             log::debug!("initializing cache...");
@@ -87,6 +91,7 @@ impl Application {
                 backend,
                 verifier: RwLock::new(tokens::TokenVerifier::new()),
                 request_counter: atomic::AtomicUsize::new(0),
+                metrics,
             })
         };
 
@@ -135,6 +140,8 @@ impl Application {
         let db_sz = self.gs.cache.report() as f64;
         let max_sz = self.gs.config.cache_size_mebibytes as f64 * 1024f64 * 1024f64;
         log::warn!("reported cache size: {:.2}MiB", db_sz / 1024f64 / 1024f64);
+        self.gs.metrics.cache_size.set(db_sz as i64);
+
         // shrink database if reported size is above the maximum size reported in the config
         if db_sz > (max_sz * MAX_MULT) {
             log::warn!("database is over maximum size, shrinking...");
@@ -182,7 +189,8 @@ impl Application {
 
         let mut interval = tokio::time::interval(time::Duration::from_secs(1));
         let mut last_ping = time::Instant::now();
-        let mut last_shrink = time::Instant::now();
+        // set last_shrink to 10 minutes ago so it'll try to shrink the db immediately
+        let mut last_shrink = time::Instant::now() - time::Duration::from_secs(600);
 
         // run until we should begin shutdown sequence
         while self.should_run.load(atomic::Ordering::SeqCst) {

@@ -112,6 +112,8 @@ lazy_static! {
     /// Lazily loaded HTTP Client that will be used for polling upstream for images.
     static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
+        // if a request exceeds 5 minutes, that's big yikes
+        .timeout(time::Duration::from_secs(300))
         .build()
         .expect("misconfigured lazy_static http client");
 }

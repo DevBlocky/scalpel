@@ -1,6 +1,7 @@
 use crate::config::AppConfig;
 use crate::utils::constants as c;
 use std::sync::{Arc, RwLock, RwLockReadGuard};
+use std::time::Duration;
 
 // below are structures that represent JSON objects for passing messages to and from the server
 //
@@ -93,7 +94,12 @@ impl Backend {
     pub fn new(config: Arc<AppConfig>) -> Self {
         Self {
             config,
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                // actual requests for this client should never exceed 60s,
+                // unless you have the worst internet connection in history
+                .timeout(Duration::from_secs(60))
+                .build()
+                .expect("backend http client"),
 
             upstream_url: RwLock::new(None),
             tls: RwLock::new(None),

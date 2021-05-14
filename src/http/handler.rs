@@ -28,21 +28,29 @@ pub(super) async fn response_from_cache(
     req: &HttpRequest,
     gs: &Arc<GlobalState>,
     key: ImageKey,
+    req_start: Timer,
 ) -> HttpResponse {
     // attempt to load image from cache (timing response times)
     let cache_hit = {
         let timer = Timer::start();
         let cache_hit = gs.cache.load(&key).await;
         log::debug!("({}) cache lookup in {}ms", uid, timer.elapsed());
+        gs.metrics
+            .record_cache_latency("load", timer.elapsed_secs() as f64);
         cache_hit
     };
 
     if let Some(cache_hit) = cache_hit {
         // found in cache, aka HIT
-        handle_cache_hit(req, cache_hit, gs.config.gzip_compress)
+        gs.metrics.record_req("hit");
+        let res = handle_cache_hit(req, cache_hit, gs);
+        gs.metrics
+            .record_request_duration("hit", req_start.elapsed_secs() as f64);
+        res
     } else {
         // the result was not found in cache, aka MISS
-        handle_cache_miss(gs, key).await
+        gs.metrics.record_req("miss");
+        handle_cache_miss(gs, key, req_start).await
     }
 }
 
@@ -69,7 +77,7 @@ fn is_browser_cached(req: &HttpRequest, etag: &header::EntityTag) -> bool {
 fn handle_cache_hit(
     req: &HttpRequest,
     image: crate::cache::ImageEntry,
-    gzip: bool,
+    gs: &Arc<GlobalState>,
 ) -> HttpResponse {
     // check whether the browser already has the image cached locally
     let etag = header::EntityTag::strong(image.get_checksum_hex());
@@ -90,7 +98,7 @@ fn handle_cache_hit(
     }
 
     // set the encoding to gzip if it is enabled by the client and the browser supports/accepts it
-    if gzip {
+    if gs.config.gzip_compress {
         if let Some(accept) = req
             .headers()
             .get(&header::ACCEPT_ENCODING)
@@ -103,7 +111,9 @@ fn handle_cache_hit(
     }
 
     // stream the data to the client
-    res.body(image.get_bytes())
+    let bytes = image.get_bytes();
+    gs.metrics.bytes_up.inc_by(bytes.len() as u64);
+    res.body(bytes)
 }
 
 /* CACHE MISS HANDLER LOGIC BELOW */
@@ -154,10 +164,9 @@ async fn start_poll_upstream(
     use std::str::FromStr;
 
     let url = {
-        let upstream_guard = backend.get_upstream();
-        let upstream = upstream_guard.as_ref().ok_or(NoUpstreamError)?;
+        let upstream = backend.get_upstream().ok_or(NoUpstreamError)?;
 
-        let base_url = reqwest::Url::parse(upstream)?;
+        let base_url = reqwest::Url::parse(&upstream)?;
         reqwest::Url::options()
             .base_url(Some(&base_url))
             .parse(&format!(
@@ -205,7 +214,7 @@ async fn start_poll_upstream(
 ///
 /// If polling from upstream fails, then it will automatically return 502 BAD GATEWAY to the user
 /// with the error as the body.
-async fn handle_cache_miss(gs: &Arc<GlobalState>, key: ImageKey) -> HttpResponse {
+async fn handle_cache_miss(gs: &Arc<GlobalState>, key: ImageKey, req_start: Timer) -> HttpResponse {
     // poll upstream, finding the total time of the request
     let res = {
         let timer = Timer::start();
@@ -238,6 +247,7 @@ async fn handle_cache_miss(gs: &Arc<GlobalState>, key: ImageKey) -> HttpResponse
         res.content_type.clone(),
         res.stream,
         res.size_hint.unwrap_or(0),
+        req_start,
     );
 
     // proxy the image to the client

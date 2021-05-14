@@ -1,7 +1,8 @@
 use crate::config::AppConfig;
 use crate::utils::constants as c;
-use std::sync::{Arc, RwLock, RwLockReadGuard};
 use std::time::Duration;
+use arc_swap::ArcSwap;
+use std::sync::Arc;
 
 // below are structures that represent JSON objects for passing messages to and from the server
 //
@@ -42,7 +43,7 @@ pub struct TlsPayload {
 // that wouldn't make any sense
 impl std::fmt::Debug for TlsPayload {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TLSPayload")
+        f.debug_struct("TlsPayload")
             .field("created_at", &self.created_at)
             .finish()
     }
@@ -77,13 +78,17 @@ impl std::fmt::Display for BackendError {
 }
 impl std::error::Error for BackendError {}
 
+#[derive(Debug)]
+struct PingStore {
+    tls: TlsPayload,
+    token_key: String,
+    upstream_url: Arc<String>,
+}
 pub struct Backend {
     config: Arc<AppConfig>,
     client: reqwest::Client,
 
-    upstream_url: RwLock<Option<String>>,
-    tls: RwLock<Option<TlsPayload>>,
-    token_key: RwLock<Option<String>>,
+    ping_info: ArcSwap<Option<PingStore>>,
 }
 
 impl Backend {
@@ -101,9 +106,7 @@ impl Backend {
                 .build()
                 .expect("backend http client"),
 
-            upstream_url: RwLock::new(None),
-            tls: RwLock::new(None),
-            token_key: RwLock::new(None),
+            ping_info: ArcSwap::from_pointee(None),
         }
     }
 
@@ -123,8 +126,12 @@ impl Backend {
     ) -> Result<(Option<TlsPayload>, Option<String>), Box<dyn std::error::Error>> {
         // structure JSON request using configuration
         let payload = {
-            // unlock RwLock to get the last created_at
-            let tls = self.tls.read().unwrap();
+            // find the tls_created_at field from the last ping info
+            let last_ping = self.ping_info.load();
+            let tls_created_at = last_ping
+                .as_ref()
+                .as_ref()
+                .map(|x| x.tls.created_at.clone());
 
             PingRequest {
                 secret: self.config.client_secret.clone(),
@@ -137,7 +144,7 @@ impl Backend {
                     .unwrap_or(0),
                 build_version: c::SPEC,
                 ip_address: self.config.external_ip.clone(),
-                tls_created_at: tls.as_ref().map(|x| x.created_at.clone()),
+                tls_created_at,
             }
         };
         log::debug!("sending ping payload to server: {:?}", &payload);
@@ -184,42 +191,39 @@ impl Backend {
         Ok((client_setup.tls, new_token_key))
     }
 
-    /// Updates the internal structures based on the OK response in [`ping`](Self::ping) with the
-    /// least reprocussions (i.e. only writing to `RwLock`s if necessary)
+    /// Updates the internal structures based on the OK response in [`ping`](Self::ping)
     ///
     /// Returns Some(token_key) if there is a new token key, otherwise None
     fn update_from_response(&self, res: &PingResponse) -> Option<String> {
-        // store new tls_created_at because the server has determined we're using an outdated
-        // version
-        if let Some(ref tls) = res.tls {
-            let mut inner = self.tls.write().unwrap();
-            *inner = Some(tls.clone());
-        }
+        let last_info = self.ping_info.load();
+        let last_info = Option::as_ref(&last_info);
 
-        // store new upstream url
-        // weird syntax because we need to drop read lock before locking for write
-        let update_upstream = {
-            let inner = self.upstream_url.read().unwrap();
-            inner.as_ref() != Some(&res.image_server)
+        // find whether or not we have a new token key
+        let new_token_key = match last_info {
+            Some(x) => x.token_key != res.token_key,
+            // if this is the initial ping, then we do have a new token key
+            _ => true,
         };
-        if update_upstream {
-            let mut inner = self.upstream_url.write().unwrap();
-            *inner = Some(res.image_server.clone());
-        }
 
-        // read comment above this for reasoning on weird syntax
-        let update_key = {
-            let inner = self.token_key.read().unwrap();
-            inner.as_ref() != Some(&res.token_key)
+        let info = PingStore {
+            // either use the new TlsPayload or the one from the previous ping
+            //
+            // this should only panic if there is no TlsPayload on the previous ping *and* this
+            // ping, which means there is a critical problem.
+            tls: res
+                .tls
+                .as_ref()
+                .or_else(|| last_info.map(|x| &x.tls))
+                .map(TlsPayload::clone)
+                .unwrap(),
+            token_key: res.token_key.clone(),
+            upstream_url: Arc::new(res.image_server.clone()),
         };
-        if update_key {
-            let mut inner = self.token_key.write().unwrap();
-            *inner = Some(res.token_key.clone());
+        self.ping_info.store(Arc::new(Some(info)));
 
-            // return inner token_key, signalling that this token key is a brand new one
-            inner.clone()
+        if new_token_key {
+            Some(res.token_key.clone())
         } else {
-            // we didn't update token key, so signal that the one stored internally is up-to-date
             None
         }
     }
@@ -258,7 +262,8 @@ impl Backend {
 
     /// Returns the upstream url stored from the API. Returns `None` if there has been no
     /// successful ping yet, and `Some` containing the upstream URL as provided up the API.
-    pub fn get_upstream(&self) -> RwLockReadGuard<Option<String>> {
-        self.upstream_url.read().unwrap()
+    pub fn get_upstream(&self) -> Option<Arc<String>> {
+        let ping_info = self.ping_info.load();
+        Option::as_ref(&ping_info).map(|x| Arc::clone(&x.upstream_url))
     }
 }

@@ -26,7 +26,14 @@ impl Timer {
     }
 
     /// Gets how long has elapsed since the start of the timer in milliseconds
+    #[inline]
     pub fn elapsed(&self) -> f32 {
         self.0.elapsed().as_micros() as f32 / 1000f32
+    }
+
+    /// Gets how long has elapsed since the start of the timer in seconds
+    #[inline]
+    pub fn elapsed_secs(&self) -> f32 {
+        self.elapsed() / 1000f32
     }
 }

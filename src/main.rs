@@ -1,11 +1,13 @@
+use arc_swap::ArcSwap;
 use env_logger::Env;
-use std::sync::{atomic, Arc, RwLock};
+use std::sync::{atomic, Arc};
 use std::time;
 
 mod backend;
 mod cache;
 mod config;
 mod http;
+mod metrics;
 mod tokens;
 mod utils;
 
@@ -18,9 +20,10 @@ pub use utils::constants;
 pub struct GlobalState {
     config: Arc<config::AppConfig>,
     cache: Box<dyn cache::ImageCache>,
-    verifier: RwLock<tokens::TokenVerifier>,
+    verifier: ArcSwap<tokens::TokenVerifier>,
     backend: Backend,
     request_counter: atomic::AtomicUsize,
+    metrics: metrics::Metrics,
 }
 
 /// Structure dedciated to holding MD@Home Rust lifetime logic
@@ -71,6 +74,8 @@ impl Application {
             // structure and it wouldn't be wise to cyclically refer back to `GlobalState` inside
             // of the backend module
             let config = Arc::new(config);
+            let metrics = metrics::Metrics::new(config.prom_opt.clone().unwrap_or_default())
+                .expect("metrics intialize");
 
             // may panic, but it's fine because it's before ping
             log::debug!("initializing cache...");
@@ -85,8 +90,9 @@ impl Application {
                 config,
                 cache,
                 backend,
-                verifier: RwLock::new(tokens::TokenVerifier::new()),
+                verifier: ArcSwap::from_pointee(tokens::TokenVerifier::new()),
                 request_counter: atomic::AtomicUsize::new(0),
+                metrics,
             })
         };
 
@@ -116,7 +122,9 @@ impl Application {
 
         // update the token verifier with the new token_key
         if let Some(token_key) = &token_key {
-            self.gs.verifier.write().unwrap().push_key_b64(token_key)?;
+            let mut verifier = tokens::TokenVerifier::new();
+            verifier.push_key_b64(token_key)?;
+            self.gs.verifier.store(Arc::new(verifier));
         }
 
         // return certificate for HTTP server
@@ -135,6 +143,8 @@ impl Application {
         let db_sz = self.gs.cache.report() as f64;
         let max_sz = self.gs.config.cache_size_mebibytes as f64 * 1024f64 * 1024f64;
         log::warn!("reported cache size: {:.2}MiB", db_sz / 1024f64 / 1024f64);
+        self.gs.metrics.cache_size.set(db_sz as i64);
+
         // shrink database if reported size is above the maximum size reported in the config
         if db_sz > (max_sz * MAX_MULT) {
             log::warn!("database is over maximum size, shrinking...");
@@ -182,7 +192,8 @@ impl Application {
 
         let mut interval = tokio::time::interval(time::Duration::from_secs(1));
         let mut last_ping = time::Instant::now();
-        let mut last_shrink = time::Instant::now();
+        // set last_shrink to 10 minutes ago so it'll try to shrink the db immediately
+        let mut last_shrink = time::Instant::now() - time::Duration::from_secs(600);
 
         // run until we should begin shutdown sequence
         while self.should_run.load(atomic::Ordering::SeqCst) {

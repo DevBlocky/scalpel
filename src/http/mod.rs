@@ -1,6 +1,6 @@
 use crate::backend::TlsPayload;
 use crate::cache::ImageKey;
-use crate::constants as c;
+use crate::utils::{self, constants as c};
 use crate::GlobalState;
 use actix_web::{
     dev, error, http, middleware, web, App, HttpRequest, HttpResponse, HttpServer,
@@ -36,6 +36,7 @@ async fn md_service(
     path: web::Path<MdPathArgs>,
     gs: web::Data<Arc<GlobalState>>,
 ) -> WebResult<HttpResponse> {
+    let req_start = utils::Timer::start();
     let peer_addr = req
         .connection_info()
         .realip_remote_addr()
@@ -48,6 +49,7 @@ async fn md_service(
             "invalid archive type. must be one of {:?}",
             ["data", "data-saver"]
         );
+        gs.metrics.record_req("dropped");
         return Ok(HttpResponse::NotFound().body(fmt));
     }
     let saver = path.archive_type == "data-saver";
@@ -55,12 +57,12 @@ async fn md_service(
     // verify the token provided in the request url if verify tokens is enabled
     if !gs.config.skip_tokens {
         // unlock verifier mutex
-        let v = gs.verifier.read().unwrap();
+        let verifier = gs.verifier.load();
 
         match path
             .token
             .as_ref()
-            .map(|token| v.verify_url_token(token, &path.chap_hash))
+            .map(|token| verifier.verify_url_token(token, &path.chap_hash))
         {
             // result is good, so bypass
             Some(Ok(_)) => {}
@@ -68,11 +70,15 @@ async fn md_service(
             // there was an error with the token, so transform into response and return
             Some(Err(e)) => {
                 log::warn!("({}) error verifying token in URL ({})", peer_addr, e);
+                gs.metrics.record_req("dropped");
                 return Err(e.into());
             }
 
             // no token was even provided, so just say request is unauthorized
-            None => return Err(error::ErrorUnauthorized("no token provided")),
+            None => {
+                gs.metrics.record_req("dropped");
+                return Err(error::ErrorUnauthorized("no token provided"));
+            }
         }
     }
 
@@ -83,7 +89,17 @@ async fn md_service(
     // respond using CacheResponder, which will handle cache HITs and MISSes
     let args = path.into_inner();
     let cache_key = ImageKey::new(args.chap_hash, args.image, saver);
-    Ok(handler::response_from_cache(&peer_addr, &req, &gs, cache_key).await)
+    Ok(handler::response_from_cache(&peer_addr, &req, &gs, cache_key, req_start).await)
+}
+
+/// Prometheus metrics endpoint
+async fn prom_service(gs: web::Data<Arc<GlobalState>>) -> HttpResponse {
+    match gs.metrics.encode_to_string() {
+        Ok(s) => HttpResponse::Ok().body(s),
+        Err(e) => {
+            HttpResponse::InternalServerError().body(format!("error encoding metrics: {}", e))
+        }
+    }
 }
 
 /// Represents an error the HTTP error can cause where there is some io error binding to the port
@@ -125,13 +141,14 @@ fn spawn_http_server(
     let mut server = HttpServer::new(move || {
         App::new()
             .app_data(data.clone())
-            .wrap(middleware::Logger::new(
-                "(%a) \"%r\" (status = %s, size = %bb) in %Dms",
-            ))
+            .wrap(
+                middleware::Logger::new("(%a) \"%r\" (status = %s, size = %bb) in %Dms")
+                    .exclude("/prometheus"),
+            )
             .wrap(
                 middleware::DefaultHeaders::new()
                     // Advertisement Headers
-                    .header("Server", server_info.clone())
+                    .header("Server", &server_info)
                     .header("X-Powered-By", "Actix Web")
                     .header("X-Version", c::VERSION)
                     // Headers required by client spec
@@ -139,7 +156,11 @@ fn spawn_http_server(
                     .header("Access-Control-Allow-Origin", "https://mangadex.org")
                     .header("Access-Control-Expose-Headers", "*")
                     .header("Cache-Control", "public, max-age=1209600")
-                    .header("Timing-Allow-Origin", "https://mangadex.org"),
+                    .header("Timing-Allow-Origin", "https://mangadex.org")
+                    .header(
+                        "X-Robots-Tag",
+                        "noindex, noarchive, nosnippet, noimageindex",
+                    ),
             )
             .wrap(middleware::Compress::new(COMPRESS))
             // regular MD@Home routes
@@ -151,6 +172,11 @@ fn spawn_http_server(
                 "/{archive_type}/{chap_hash}/{image}", // untokenized route
                 web::get().to(md_service),
             )
+            .default_service(
+                web::route().to(|| HttpResponse::NotFound().body("no valid route found")),
+            )
+            // Prom metrics route
+            .route("/prometheus", web::get().to(prom_service))
     })
     .keep_alive(gs.config.keep_alive)
     .shutdown_timeout(60)

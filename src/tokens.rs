@@ -52,7 +52,12 @@ impl ResponseError for TokenError {
 
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::TokenExpired => StatusCode::GONE,
+            // official spec codes
+            // https://gitlab.com/mangadex-pub/mangadex_at_home/-/wikis/Formal-Specification-for-Custom-Clients#token
+            Self::TokenExpired
+            | Self::InvalidChapterHash
+            | Self::DecryptFailed
+            | Self::InvalidBase64 => StatusCode::FORBIDDEN,
             _ => StatusCode::BAD_REQUEST,
         }
     }

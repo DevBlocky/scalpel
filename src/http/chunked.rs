@@ -1,11 +1,67 @@
 use crate::{cache::ImageKey, utils::Timer, GlobalState};
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{Bytes, BytesMut};
 use futures::stream::Stream;
+use std::error::Error;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-pub(super) type UpstreamStream = dyn Stream<Item = reqwest::Result<Bytes>> + Unpin;
+/// This type represents a byte aggregator that can be poisoned or "taken" from a mutable reference
+///
+/// If the aggregator is poisoned, it represents that the data inside is invalid and shouldn't be used.
+/// If poisoned, then the data inside has already been taken and frozen
+struct BytesAgg {
+    inner: BytesAggInner,
+}
+enum BytesAggInner {
+    Stable(BytesMut),
+    Taken,
+    Poisoned,
+}
+
+impl BytesAgg {
+    /// Create a new stable [`BytesAgg`] with the defined capacity
+    #[inline]
+    fn new(cap: usize) -> Self {
+        Self {
+            inner: BytesAggInner::Stable(BytesMut::with_capacity(cap)),
+        }
+    }
+    /// Adds bytes to the aggregator
+    ///
+    /// Returns whether they were added to the agg or if the agg doesn't exist
+    #[inline]
+    fn put<T: AsRef<[u8]>>(&mut self, bytes: T) -> bool {
+        use bytes::BufMut;
+        match self.inner {
+            BytesAggInner::Stable(ref mut agg) => agg.put(bytes.as_ref()),
+            _ => return false,
+        }
+        true
+    }
+    #[inline]
+    fn len(&self) -> usize {
+        match self.inner {
+            BytesAggInner::Stable(ref agg) => agg.len(),
+            _ => 0,
+        }
+    }
+
+    #[inline]
+    fn take(&mut self) -> Option<Bytes> {
+        let x = std::mem::replace(&mut self.inner, BytesAggInner::Taken);
+        match x {
+            BytesAggInner::Stable(x) => Some(x.freeze()),
+            _ => None,
+        }
+    }
+    #[inline]
+    fn poison(&mut self) {
+        self.inner = BytesAggInner::Poisoned;
+    }
+}
+
+pub(super) type UpstreamStream<E> = dyn Stream<Item = Result<Bytes, E>> + Unpin;
 
 /// A stream to handle cache MISSes by streaming content to the user and saving it until the stream
 /// it complete, then saving it to the cache database.
@@ -13,34 +69,34 @@ pub(super) type UpstreamStream = dyn Stream<Item = reqwest::Result<Bytes>> + Unp
 /// To break it down: This structure converts a `reqwest` [`Stream`] into an `actix_web` stream,
 /// saving all data to an aggregator, then saving the aggregator to cache once the stream is
 /// completely done.
-pub(super) struct ChunkedUpstreamPoll {
+pub(super) struct ChunkedUpstreamPoll<E: Error> {
     gs: Arc<GlobalState>,
-    upstream: Pin<Box<UpstreamStream>>,
-    agg: BytesMut,
+    upstream: Pin<Box<UpstreamStream<E>>>,
+    agg: BytesAgg,
     cache_info: Arc<(ImageKey, mime::Mime)>,
     req_start: Timer,
 }
 
-impl ChunkedUpstreamPoll {
+impl<E: Error> ChunkedUpstreamPoll<E> {
     pub(super) fn new(
         gs: &Arc<GlobalState>,
         key: ImageKey,
         mime_type: mime::Mime,
-        stream: Box<UpstreamStream>,
+        stream: Box<UpstreamStream<E>>,
         size_hint: usize,
         req_start: Timer,
     ) -> Self {
         Self {
             gs: Arc::clone(gs),
             upstream: Pin::new(stream),
-            agg: BytesMut::with_capacity(size_hint),
+            agg: BytesAgg::new(size_hint),
             cache_info: Arc::new((key, mime_type)),
             req_start,
         }
     }
 }
 
-impl Stream for ChunkedUpstreamPoll {
+impl<E: Error + 'static> Stream for ChunkedUpstreamPoll<E> {
     type Item = Result<Bytes, actix_web::Error>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -57,6 +113,7 @@ impl Stream for ChunkedUpstreamPoll {
             Poll::Ready(Some(Err(e))) => {
                 // internal stream had a problem? return error response
                 log::error!("error occurred during upstream download: {}", e);
+                self.agg.poison();
                 Poll::Ready(Some(Err(UpstreamError(e).into())))
             }
 
@@ -76,14 +133,23 @@ impl Stream for ChunkedUpstreamPoll {
     }
 }
 
-impl Drop for ChunkedUpstreamPoll {
+impl<E: Error> Drop for ChunkedUpstreamPoll<E> {
     /// Schedules a tokio task to save the cache aggregator when this value is dropped
     fn drop(&mut self) {
-        let bytes = std::mem::take(&mut self.agg).freeze();
+        // take the bytes from the aggreator. if the bytes have already been taken
+        // or the bytes have been poisoned (because of an error), this will ret None
+        let bytes = match self.agg.take() {
+            Some(b) => b,
+            None => {
+                log::warn!("no byte aggregator found, skipping cache save");
+                return;
+            }
+        };
+
+        // spawn a cache save task with tokio
         let bytes_len = bytes.len() as u64;
         let gs = Arc::clone(&self.gs);
         let cache_info = Arc::clone(&self.cache_info);
-
         tokio::spawn(async move {
             let (key, mime) = cache_info.as_ref();
 
@@ -107,19 +173,19 @@ impl Drop for ChunkedUpstreamPoll {
 ///
 /// Can be converted into an `actix_web::Error` as it implemented the `ResponseError` trait.
 #[derive(Debug)]
-struct UpstreamError(reqwest::Error);
+struct UpstreamError<E: Error>(E);
 
-impl std::fmt::Display for UpstreamError {
+impl<E: Error> std::fmt::Display for UpstreamError<E> {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(fmt, "upstream error: {}", self.0)
     }
 }
-impl std::error::Error for UpstreamError {
+impl<E: Error + 'static> std::error::Error for UpstreamError<E> {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(&self.0)
     }
 }
-impl actix_web::ResponseError for UpstreamError {
+impl<E: Error> actix_web::ResponseError for UpstreamError<E> {
     fn status_code(&self) -> actix_web::http::StatusCode {
         // since this error occurs if upstream has an error, it can be considered a BAD GATEWAY
         // problem/code and not the regular INTERNAL SERVER ERROR

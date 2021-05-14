@@ -144,7 +144,7 @@ impl std::error::Error for NoUpstreamError {}
 
 /// A structure that includes all of the data needed to stream a response back to the client.
 struct UpstreamResponse {
-    stream: Box<UpstreamStream>,
+    stream: Box<UpstreamStream<reqwest::Error>>,
     size_hint: Option<usize>,
 
     status: StatusCode,

@@ -228,6 +228,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arc-swap"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4d7d63395147b81a9e570bcc6243aaf71c017bd666d4909cfef0085bdda8d73"
+
+[[package]]
 name = "async-trait"
 version = "0.1.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1542,6 +1548,7 @@ name = "scalpel"
 version = "0.4.1"
 dependencies = [
  "actix-web",
+ "arc-swap",
  "async-trait",
  "bincode",
  "bytes",

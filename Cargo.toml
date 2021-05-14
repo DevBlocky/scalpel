@@ -33,6 +33,7 @@ openssl = "0.10.33"
 hex = "0.4.3"
 lazy_static = "1.4.0"
 mime = "0.3.16"
+arc-swap = "1.2.0"
 
 [dependencies.tokio]
 version = "1.4.0"

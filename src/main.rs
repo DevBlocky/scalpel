@@ -142,7 +142,7 @@ impl Application {
 
         let db_sz = self.gs.cache.report() as f64;
         let max_sz = self.gs.config.cache_size_mebibytes as f64 * 1024f64 * 1024f64;
-        log::warn!("reported cache size: {:.2}MiB", db_sz / 1024f64 / 1024f64);
+        log::info!("reported cache size: {:.2}MiB", db_sz / 1024f64 / 1024f64);
         self.gs.metrics.cache_size.set(db_sz as i64);
 
         // shrink database if reported size is above the maximum size reported in the config
@@ -208,7 +208,7 @@ impl Application {
                         crt = new_crt;
                         server.respawn_with_new_cert(&crt).await.unwrap();
                     }
-                    Err(e) => log::warn!("error pinging backend: {}", e),
+                    Err(e) => log::error!("error pinging backend: {}", e),
                     _ => {} // pass-over
                 }
             }

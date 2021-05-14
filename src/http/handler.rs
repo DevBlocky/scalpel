@@ -43,7 +43,7 @@ pub(super) async fn response_from_cache(
     if let Some(cache_hit) = cache_hit {
         // found in cache, aka HIT
         gs.metrics.record_req("hit");
-        let res = handle_cache_hit(req, cache_hit, gs);
+        let res = handle_cache_hit(uid, req, cache_hit, gs);
         gs.metrics
             .record_request_duration("hit", req_start.elapsed_secs() as f64);
         res
@@ -75,6 +75,7 @@ fn is_browser_cached(req: &HttpRequest, etag: &header::EntityTag) -> bool {
 /// they have the image cached locally. Will also set gzip (if enabled by client) and provide
 /// necessary headers (like `ETag` and `Vary`)
 fn handle_cache_hit(
+    uid: &str,
     req: &HttpRequest,
     image: crate::cache::ImageEntry,
     gs: &Arc<GlobalState>,
@@ -93,7 +94,7 @@ fn handle_cache_hit(
     // if the image is already cached in the browser, then we can just return the associated code
     // telling the browser that it doesn't need to download anything
     if is_client_cached {
-        log::debug!("Browser Cache: HIT");
+        log::debug!("({}) browser cache HIT", uid);
         return res.status(StatusCode::NOT_MODIFIED).finish();
     }
 
@@ -136,7 +137,7 @@ lazy_static! {
 struct NoUpstreamError;
 impl std::fmt::Display for NoUpstreamError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(fmt, "")
+        write!(fmt, "no upstream URL available (how did we get here?)")
     }
 }
 impl std::error::Error for NoUpstreamError {}
@@ -226,8 +227,8 @@ async fn handle_cache_miss(gs: &Arc<GlobalState>, key: ImageKey, req_start: Time
     let res = match res {
         Ok(res) => res,
         Err(e) => {
-            log::warn!("error polling upstream image: {}", e);
-            return HttpResponse::BadGateway().finish();
+            log::error!("unexpected upstream response: {}", e);
+            return HttpResponse::BadGateway().body("unexpected upstream response");
         }
     };
 

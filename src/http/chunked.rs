@@ -56,7 +56,7 @@ impl Stream for ChunkedUpstreamPoll {
             // unsuccessful upstream poll
             Poll::Ready(Some(Err(e))) => {
                 // internal stream had a problem? return error response
-                log::warn!("error polling upstream image: {}", e);
+                log::error!("error occurred during upstream download: {}", e);
                 Poll::Ready(Some(Err(UpstreamError(e).into())))
             }
 

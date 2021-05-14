@@ -121,18 +121,14 @@ fn spawn_http_server(
     const COMPRESS: http::ContentEncoding = http::ContentEncoding::Identity;
 
     // obtain config options
-    let (server_info, bind_addr) = {
-        (
-            format!(
-                "{name} v{version} ({spec}) - {url}",
-                name = c::PROG_NAME,
-                version = c::VERSION,
-                spec = c::SPEC,
-                url = c::REPO_URL
-            ),
-            format!("{}:{}", &gs.config.bind_address, gs.config.port),
-        )
-    };
+    let server_info = format!(
+        "{name} v{version} ({spec}) - {url}",
+        name = c::PROG_NAME,
+        version = c::VERSION,
+        spec = c::SPEC,
+        url = c::REPO_URL
+    );
+    let bind_addr = format!("{}:{}", &gs.config.bind_address, gs.config.port);
 
     // create the shared data object
     let data = web::Data::new(Arc::clone(&gs));
@@ -172,11 +168,11 @@ fn spawn_http_server(
                 "/{archive_type}/{chap_hash}/{image}", // untokenized route
                 web::get().to(md_service),
             )
+            // Prom metrics route
+            .route("/prometheus", web::get().to(prom_service))
             .default_service(
                 web::route().to(|| HttpResponse::NotFound().body("no valid route found")),
             )
-            // Prom metrics route
-            .route("/prometheus", web::get().to(prom_service))
     })
     .keep_alive(gs.config.keep_alive)
     .shutdown_timeout(60)

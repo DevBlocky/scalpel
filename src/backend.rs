@@ -1,8 +1,8 @@
 use crate::config::AppConfig;
 use crate::utils::constants as c;
-use std::time::Duration;
 use arc_swap::ArcSwap;
 use std::sync::Arc;
+use std::time::Duration;
 
 // below are structures that represent JSON objects for passing messages to and from the server
 //

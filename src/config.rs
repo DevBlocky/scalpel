@@ -62,9 +62,14 @@ pub struct FsConfig {
     pub path: String,
     #[serde(default = "fsce_rw_buf_sz")]
     pub rw_buffer_size: usize,
+    #[serde(default = "fsce_lru_sz")]
+    pub lru_size_mebibytes: usize,
 }
 fn fsce_rw_buf_sz() -> usize {
     16
+}
+fn fsce_lru_sz() -> usize {
+    128
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]

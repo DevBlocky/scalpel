@@ -28,6 +28,9 @@ fs_options:
     # This generally is a good number except for very specific workloads
     # Default is 16KiB
     #rw_buffer_size: 16
+    # Max MiB that of RAM that can be used for the in-memory cache
+    # Default is 128MiB, 0 disables in-memory cache completely
+    #lru_size_mebibytes: 128
 
 # Configuration for "rocksdb" cache engine. Only required if engine is rocksdb
 rocksdb_options:

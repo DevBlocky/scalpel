@@ -32,6 +32,7 @@ pub struct FileSystemCache {
 impl FileSystemCache {
     pub async fn new(config: &FsConfig) -> Result<Self, CacheError> {
         let cache = forceps::Cache::new(&config.path)
+            .memory_lru_max_size(config.lru_size_mebibytes * 1024 * 1024)
             .read_write_buffer(config.rw_buffer_size * 1024)
             .build()
             .await

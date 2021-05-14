@@ -51,8 +51,7 @@ default-features = false
 optional = true
 
 [dependencies.forceps]
-git = "https://github.com/DevBlocky/forceps"
-branch = "main"
+version = "0.3.0"
 optional = true
 
 [profile.release]

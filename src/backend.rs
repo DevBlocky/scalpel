@@ -1,5 +1,6 @@
 use crate::config::AppConfig;
 use crate::utils::constants as c;
+use std::time::Duration;
 use arc_swap::ArcSwap;
 use std::sync::Arc;
 
@@ -98,7 +99,12 @@ impl Backend {
     pub fn new(config: Arc<AppConfig>) -> Self {
         Self {
             config,
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                // actual requests for this client should never exceed 60s,
+                // unless you have the worst internet connection in history
+                .timeout(Duration::from_secs(60))
+                .build()
+                .expect("backend http client"),
 
             ping_info: ArcSwap::from_pointee(None),
         }

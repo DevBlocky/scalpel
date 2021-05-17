@@ -1,6 +1,7 @@
 use crate::config::AppConfig;
 use crate::utils::constants as c;
 use arc_swap::ArcSwap;
+use lazy_static::lazy_static;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -91,9 +92,11 @@ pub struct Backend {
     ping_info: ArcSwap<Option<PingStore>>,
 }
 
+lazy_static! {
+    static ref BASE_URL: reqwest::Url =
+        reqwest::Url::parse("https://api.mangadex.network").unwrap();
+}
 impl Backend {
-    const URL: &'static str = "https://api.mangadex.network";
-
     /// Creates a skeleton [`Backend`] that is ready to start pinging. If no ping has been
     /// completed yet, then all getters will return `None`.
     pub fn new(config: Arc<AppConfig>) -> Self {
@@ -151,7 +154,9 @@ impl Backend {
 
         // format URL and make the request to the server (handling any errors that happen in the
         // process)
-        let url = reqwest::Url::parse(&format!("{}/ping", Self::URL))?;
+        let url = reqwest::Url::options()
+            .base_url(Some(&BASE_URL))
+            .parse("/ping")?;
         let res = self
             .client
             .post(url)
@@ -240,7 +245,9 @@ impl Backend {
 
         // format URL and make the request to the server (handling any errors that happen in the
         // process)
-        let url = reqwest::Url::parse(&format!("{}/stop", Self::URL))?;
+        let url = reqwest::Url::options()
+            .base_url(Some(&BASE_URL))
+            .parse("/stop")?;
         let res = self
             .client
             .post(url)

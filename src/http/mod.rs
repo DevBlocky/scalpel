@@ -257,7 +257,7 @@ impl HttpServerLifecycle {
         use openssl::rsa::Rsa;
         use openssl::x509::X509;
 
-        let mut builder = ssl::SslAcceptor::mozilla_intermediate(ssl::SslMethod::tls())?;
+        let mut builder = ssl::SslAcceptor::mozilla_intermediate(ssl::SslMethod::tls_server())?;
 
         // push the full-chain certificate into the SslAcceptorBuilder
         let full_chain = X509::stack_from_pem(cert.certificate.as_bytes())?;
@@ -272,6 +272,7 @@ impl HttpServerLifecycle {
         // push the private key to the SslAcceptorBuilder
         let priv_key = Rsa::private_key_from_pem(cert.private_key.as_bytes())?;
         builder.set_private_key(PKey::from_rsa(priv_key)?.as_ref())?;
+        builder.check_private_key()?;
 
         // set minimum ssl version based on config
         builder.set_min_proto_version(Some(if secure_tls {
@@ -279,6 +280,11 @@ impl HttpServerLifecycle {
         } else {
             ssl::SslVersion::TLS1
         }))?;
+
+        // attempted optimizations
+        builder.set_read_ahead(true);
+        builder.set_session_cache_mode(ssl::SslSessionCacheMode::SERVER);
+        builder.set_session_cache_size(1024 * 4); // 4000 sessions (instead of the default 20000)
 
         Ok(builder)
     }

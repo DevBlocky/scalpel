@@ -12,6 +12,7 @@ const NONCE_SIZE: usize = 24;
 struct TokenPayload {
     expires: String,
     hash: String,
+    client_id: String,
 }
 
 /// Every Error Kind that could happen when inside the TokenVerifier.
@@ -133,13 +134,14 @@ impl TokenVerifier {
         // extract nonce and cipher, then decypt
         let payload = {
             let (nonce, cipher) = Self::token_to_cipher(token.as_ref())?;
-            self.decrypt_token(&nonce, &cipher)?
+            self.decrypt_token(&nonce, cipher)?
         };
 
         // convert bytes to string, then deserialize into json
-        let payload = String::from_utf8(payload)
-            .ok()
-            .and_then(|s| json::from_str::<TokenPayload>(&s).ok());
+        let payload = std::str::from_utf8(&payload).ok().and_then(|s| {
+            log::trace!("token payload: {}", s);
+            json::from_str::<TokenPayload>(s).ok()
+        });
 
         // verify contents inside the payload if the payload itself is valid
         if let Some(payload) = payload {
@@ -173,30 +175,23 @@ impl TokenVerifier {
     }
 
     /// Parse ciphertext and nonce bytes from provided token bytes.
-    fn token_to_cipher(token: &[u8]) -> Result<(box_::Nonce, Vec<u8>), TokenError> {
+    fn token_to_cipher<'a>(token: &'a [u8]) -> Result<(box_::Nonce, &'a [u8]), TokenError> {
         // prevents panic on slice because of short length
         if token.len() <= NONCE_SIZE {
             return Err(TokenError::TokenMalformed);
         }
 
-        // get byte ranges from token bytes
-        // according to spec, first 24 is nonce and rest is cipher text
+        // extract nonce bytes from token and turn into Nonce structure
         let nonce_bytes = &token[0..NONCE_SIZE];
-        let cipher_bytes = &token[NONCE_SIZE..];
-
-        // convert nonce into box_::Nonce
         let nonce = box_::Nonce::from_slice(nonce_bytes).ok_or(TokenError::NonceMalformed)?;
 
-        Ok((nonce, Vec::from(cipher_bytes)))
+        Ok((nonce, &token[NONCE_SIZE..]))
     }
 
     /// Decrypts ciphertext using the internal `PrecomputedKey`. If `Err` is present, it is
     /// always `TokenErrorKind::DecryptFailed`.
     fn decrypt_token(&self, nonce: &box_::Nonce, cipher: &[u8]) -> Result<Vec<u8>, TokenError> {
-        let key = match &self.0 {
-            Some(x) => x,
-            None => return Err(TokenError::NoKey),
-        };
+        let key = self.0.as_ref().ok_or(TokenError::NoKey)?;
         box_::open_precomputed(cipher, nonce, key).map_err(|_| TokenError::DecryptFailed)
     }
 }
@@ -263,7 +258,8 @@ mod tests {
         // create a preliminary token payload that expires in one hour
         let data = json::json!({
             "expires": in_one_hour().to_rfc3339(),
-            "hash": CHAP_HASH
+            "hash": CHAP_HASH,
+            "client_id": "1"
         })
         .to_string();
 
@@ -284,6 +280,7 @@ mod tests {
         let data = json::json!({
             "expires": in_one_hour().to_rfc3339(),
             "hash": CHAP_HASH,
+            "client_id": "1",
 
             // fields that should be ignored by verifier
             "str_field": "EXAMPLE",

@@ -50,7 +50,7 @@ async fn md_service(
             ["data", "data-saver"]
         );
         gs.metrics.record_req("dropped");
-        return Ok(HttpResponse::NotFound().body(fmt));
+        return Err(error::ErrorNotFound(fmt));
     }
     let saver = path.archive_type == "data-saver";
 
@@ -203,7 +203,14 @@ impl std::fmt::Display for Error {
         }
     }
 }
-impl std::error::Error for Error {}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(match self {
+            Self::Acceptor(e) => e,
+            Self::Port(e) => e,
+        })
+    }
+}
 
 /// Lifecycle handler for the MD@Home HTTP server.
 ///

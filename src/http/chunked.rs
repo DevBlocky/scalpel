@@ -6,14 +6,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-/// This type represents a byte aggregator that can be poisoned or "taken" from a mutable reference
-///
-/// If the aggregator is poisoned, it represents that the data inside is invalid and shouldn't be used.
-/// If poisoned, then the data inside has already been taken and frozen
-struct BytesAgg {
-    inner: BytesAggInner,
-}
-enum BytesAggInner {
+enum BytesAgg {
     Stable(BytesMut),
     Taken,
     Poisoned,
@@ -23,9 +16,7 @@ impl BytesAgg {
     /// Create a new stable [`BytesAgg`] with the defined capacity
     #[inline]
     fn new(cap: usize) -> Self {
-        Self {
-            inner: BytesAggInner::Stable(BytesMut::with_capacity(cap)),
-        }
+        Self::Stable(BytesMut::with_capacity(cap))
     }
     /// Adds bytes to the aggregator
     ///
@@ -33,31 +24,31 @@ impl BytesAgg {
     #[inline]
     fn put<T: AsRef<[u8]>>(&mut self, bytes: T) -> bool {
         use bytes::BufMut;
-        match self.inner {
-            BytesAggInner::Stable(ref mut agg) => agg.put(bytes.as_ref()),
+        match self {
+            Self::Stable(ref mut agg) => agg.put(bytes.as_ref()),
             _ => return false,
         }
         true
     }
     #[inline]
     fn len(&self) -> usize {
-        match self.inner {
-            BytesAggInner::Stable(ref agg) => agg.len(),
+        match self {
+            Self::Stable(ref agg) => agg.len(),
             _ => 0,
         }
     }
 
     #[inline]
     fn take(&mut self) -> Option<Bytes> {
-        let x = std::mem::replace(&mut self.inner, BytesAggInner::Taken);
-        match x {
-            BytesAggInner::Stable(x) => Some(x.freeze()),
+        let last = std::mem::replace(self, Self::Taken);
+        match last {
+            Self::Stable(x) => Some(x.freeze()),
             _ => None,
         }
     }
     #[inline]
     fn poison(&mut self) {
-        self.inner = BytesAggInner::Poisoned;
+        *self = Self::Poisoned;
     }
 }
 
@@ -106,7 +97,7 @@ impl<E: Error + 'static> Stream for ChunkedUpstreamPoll<E> {
             // successful upstream poll
             Poll::Ready(Some(Ok(bytes))) => {
                 // copy new bytes to aggregator and then return value
-                self.agg.put(bytes.as_ref());
+                self.agg.put(&bytes);
                 Poll::Ready(Some(Ok(bytes)))
             }
             // unsuccessful upstream poll

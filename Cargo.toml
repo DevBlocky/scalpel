@@ -37,7 +37,7 @@ mime = "0.3.16"
 arc-swap = "1.2.0"
 
 [dependencies.tokio]
-version = "1.4.0"
+version = "1.6.0"
 features = ["rt", "rt-multi-thread", "macros", "fs", "io-util", "time"]
 
 [dependencies.actix-web]

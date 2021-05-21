@@ -6,7 +6,6 @@ use actix_web::{
     dev, error, http, middleware, web, App, HttpRequest, HttpResponse, HttpServer,
     Result as WebResult,
 };
-use openssl::ssl;
 use std::io;
 use std::sync::{atomic, Arc};
 
@@ -116,7 +115,7 @@ impl std::error::Error for PortBindError {}
 // TODO: Doc
 fn spawn_http_server(
     gs: Arc<GlobalState>,
-    acceptor: ssl::SslAcceptorBuilder,
+    tls_config: rustls::ServerConfig,
 ) -> Result<dev::Server, PortBindError> {
     const COMPRESS: http::ContentEncoding = http::ContentEncoding::Identity;
 
@@ -184,7 +183,7 @@ fn spawn_http_server(
     }
 
     server
-        .bind_openssl(&bind_addr, acceptor)
+        .bind_rustls(bind_addr, tls_config)
         .map_err(PortBindError)
         .map(|s| s.run())
 }
@@ -192,7 +191,7 @@ fn spawn_http_server(
 /// Error that represents all of the addressable errors of creating the HTTP Server.
 #[derive(Debug)]
 pub enum Error {
-    Acceptor(ssl::Error),
+    Acceptor(rustls::TLSError),
     Port(PortBindError),
 }
 impl std::fmt::Display for Error {
@@ -228,8 +227,7 @@ impl HttpServerLifecycle {
     /// instance of `Self` if successful. Errors will be propagated up the stack.
     pub fn new(gs: Arc<GlobalState>, cert: &TlsPayload) -> Result<Self, Error> {
         // configures the SSL certificate with OpenSSL
-        let acceptor = Self::cert_payload_to_acceptor(cert, gs.config.enforce_secure_tls)
-            .map_err(Error::Acceptor)?;
+        let acceptor = Self::cert_payload_to_tls_config(cert).map_err(Error::Acceptor)?;
 
         // spawn the HTTP server and begin accepting requests
         let srv = spawn_http_server(Arc::clone(&gs), acceptor).map_err(Error::Port)?;
@@ -246,8 +244,7 @@ impl HttpServerLifecycle {
         // connections to close off first.
         self.shutdown(false).await;
 
-        let acceptor = Self::cert_payload_to_acceptor(cert, self.gs.config.enforce_secure_tls)
-            .map_err(Error::Acceptor)?;
+        let acceptor = Self::cert_payload_to_tls_config(cert).map_err(Error::Acceptor)?;
 
         let srv = spawn_http_server(Arc::clone(&self.gs), acceptor).map_err(Error::Port)?;
         self.actix = srv;
@@ -255,45 +252,24 @@ impl HttpServerLifecycle {
         Ok(())
     }
 
-    /// Converts a [`TLSPayload`] into an Ssl Builder that ActixWeb will use for TLS
-    fn cert_payload_to_acceptor(
+    /// Converts a [`TlsPayload`] into a rustls ServerConfig used for TLS
+    fn cert_payload_to_tls_config(
         cert: &TlsPayload,
-        secure_tls: bool,
-    ) -> Result<ssl::SslAcceptorBuilder, ssl::Error> {
-        use openssl::pkey::PKey;
-        use openssl::rsa::Rsa;
-        use openssl::x509::X509;
+    ) -> Result<rustls::ServerConfig, rustls::TLSError> {
+        use rustls::{
+            internal::pemfile::{certs, rsa_private_keys},
+            NoClientAuth, ServerConfig, TLSError,
+        };
+        use std::io::Cursor;
 
-        let mut builder = ssl::SslAcceptor::mozilla_intermediate(ssl::SslMethod::tls_server())?;
+        let mut config = ServerConfig::new(NoClientAuth::new());
 
-        // push the full-chain certificate into the SslAcceptorBuilder
-        let full_chain = X509::stack_from_pem(cert.certificate.as_bytes())?;
-        let mut full_chain_iter = full_chain.iter();
-        if let Some(x509) = full_chain_iter.next() {
-            builder.set_certificate(x509.as_ref())?;
-        }
-        for next_chain in full_chain_iter {
-            builder.add_extra_chain_cert(next_chain.clone())?;
-        }
-
-        // push the private key to the SslAcceptorBuilder
-        let priv_key = Rsa::private_key_from_pem(cert.private_key.as_bytes())?;
-        builder.set_private_key(PKey::from_rsa(priv_key)?.as_ref())?;
-        builder.check_private_key()?;
-
-        // set minimum ssl version based on config
-        builder.set_min_proto_version(Some(if secure_tls {
-            ssl::SslVersion::TLS1_2
-        } else {
-            ssl::SslVersion::TLS1
-        }))?;
-
-        // attempted optimizations
-        builder.set_read_ahead(true);
-        builder.set_session_cache_mode(ssl::SslSessionCacheMode::SERVER);
-        builder.set_session_cache_size(1024 * 4); // 4000 sessions (instead of the default 20000)
-
-        Ok(builder)
+        let certs = certs(&mut Cursor::new(&cert.certificate))
+            .map_err(|_| TLSError::General("invalid certificate".to_string()))?;
+        let mut priv_key = rsa_private_keys(&mut Cursor::new(&cert.private_key))
+            .map_err(|_| TLSError::General("invalid privkey".to_string()))?;
+        config.set_single_cert(certs, priv_key.remove(0))?;
+        Ok(config)
     }
 
     /// Wrapper for the internal Actix Web server stop function

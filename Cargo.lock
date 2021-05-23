@@ -598,9 +598,9 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "forceps"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3fdf6e77e3b284ba13ba11ec211860603ad47e1b7400e70f0d620fcada21f5c"
+checksum = "2780cd078c06cade80ac5e06e8817e05683ff4fbf4fb4fdf4912f40979715bdc"
 dependencies = [
  "async-trait",
  "bson",

@@ -30,6 +30,7 @@ impl BytesAgg {
         }
         true
     }
+    /// Total length of the aggregator, or 0 if it doesn't exist
     #[inline]
     fn len(&self) -> usize {
         match self {
@@ -38,6 +39,9 @@ impl BytesAgg {
         }
     }
 
+    /// Takes the aggregator out of the wrapper if it's still valid
+    ///
+    /// Will return `None` on Poisoned or Taken
     #[inline]
     fn take(&mut self) -> Option<Bytes> {
         let last = std::mem::replace(self, Self::Taken);
@@ -46,9 +50,18 @@ impl BytesAgg {
             _ => None,
         }
     }
+
+    /// Sets the aggregator to poisoned (possibly invalid or uncomplete bytes)
     #[inline]
     fn poison(&mut self) {
         *self = Self::Poisoned;
+    }
+    #[inline]
+    fn is_poisoned(&self) -> bool {
+        match self {
+            Self::Poisoned => true,
+            _ => false,
+        }
     }
 }
 
@@ -133,6 +146,10 @@ impl<E: Error> Drop for ChunkedUpstreamPoll<E> {
             Some(b) => b,
             None => {
                 log::warn!("no byte aggregator found, skipping cache save");
+                // if poisoned, then mark as a failed request
+                if self.agg.is_poisoned() {
+                    self.gs.metrics.failed_requests_total.inc();
+                }
                 return;
             }
         };
@@ -148,13 +165,15 @@ impl<E: Error> Drop for ChunkedUpstreamPoll<E> {
             gs.cache.save(key, mime.to_string(), bytes).await;
             log::debug!("cache save in {}ms", timer.elapsed());
             gs.metrics
-                .record_cache_latency("save", timer.elapsed_secs() as f64);
+                .cache_save_histo
+                .observe(timer.elapsed_secs() as f64);
         });
 
         // update all metrics
         self.gs
             .metrics
-            .record_request_duration("miss", self.req_start.elapsed_secs() as f64);
+            .miss_request_process_seconds
+            .observe(self.req_start.elapsed_secs() as f64);
         self.gs.metrics.bytes_up.inc_by(bytes_len);
         self.gs.metrics.bytes_down.inc_by(bytes_len);
     }

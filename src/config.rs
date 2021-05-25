@@ -28,9 +28,6 @@ pub struct AppConfig {
     pub keep_alive: usize,
     pub enforce_secure_tls: bool,
 
-    #[serde(rename = "prometheus")]
-    pub prom_opt: Option<PromConfig>,
-
     // info sent to external api
     pub external_ip: Option<String>,
     pub external_port: Option<u16>,
@@ -70,12 +67,6 @@ fn fsce_rw_buf_sz() -> usize {
 }
 fn fsce_lru_sz() -> usize {
     128
-}
-
-#[derive(Debug, Deserialize, Clone, Default)]
-pub struct PromConfig {
-    pub cache_latency_buckets: Option<Vec<f64>>,
-    pub request_duration_buckets: Option<Vec<f64>>,
 }
 
 /// Various different errors that could happen when opening or parsing a configuration file.

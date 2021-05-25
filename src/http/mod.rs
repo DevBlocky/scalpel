@@ -49,7 +49,7 @@ async fn md_service(
             "invalid archive type. must be one of {:?}",
             ["data", "data-saver"]
         );
-        gs.metrics.record_req("dropped");
+        gs.metrics.dropped_requests_total.inc();
         return Err(error::ErrorNotFound(fmt));
     }
     let saver = path.archive_type == "data-saver";
@@ -70,13 +70,13 @@ async fn md_service(
             // there was an error with the token, so transform into response and return
             Some(Err(e)) => {
                 log::warn!("({}) error verifying token in URL ({})", peer_addr, e);
-                gs.metrics.record_req("dropped");
+                gs.metrics.dropped_requests_total.inc();
                 return Err(e.into());
             }
 
             // no token was even provided, so just say request is unauthorized
             None => {
-                gs.metrics.record_req("dropped");
+                gs.metrics.dropped_requests_total.inc();
                 return Err(error::ErrorUnauthorized("no token provided"));
             }
         }

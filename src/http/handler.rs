@@ -36,21 +36,25 @@ pub(super) async fn response_from_cache(
         let cache_hit = gs.cache.load(&key).await;
         log::debug!("({}) cache lookup in {}ms", uid, timer.elapsed());
         gs.metrics
-            .record_cache_latency("load", timer.elapsed_secs() as f64);
+            .cache_load_seconds
+            .observe(timer.elapsed_secs() as f64);
         cache_hit
     };
 
     if let Some(cache_hit) = cache_hit {
         // found in cache, aka HIT
-        gs.metrics.record_req("hit");
-        let res = handle_cache_hit(uid, req, cache_hit, gs);
+        let res = handle_cache_hit(uid, gs, req, cache_hit);
+        // NOTE: recording metrics here because handle_cache_hit doesn't
+        // contain logic for failure
         gs.metrics
-            .record_request_duration("hit", req_start.elapsed_secs() as f64);
+            .hit_request_process_seconds
+            .observe(req_start.elapsed_secs() as f64);
+        gs.metrics.hit_requests_total.inc();
         res
     } else {
         // the result was not found in cache, aka MISS
-        gs.metrics.record_req("miss");
-        handle_cache_miss(gs, key, req_start).await
+        // NOTE: metrics are handled in chunked.rs
+        handle_cache_miss(uid, gs, key, req_start).await
     }
 }
 
@@ -76,9 +80,9 @@ fn is_browser_cached(req: &HttpRequest, etag: &header::EntityTag) -> bool {
 /// necessary headers (like `ETag` and `Vary`)
 fn handle_cache_hit(
     uid: &str,
+    gs: &Arc<GlobalState>,
     req: &HttpRequest,
     image: crate::cache::ImageEntry,
-    gs: &Arc<GlobalState>,
 ) -> HttpResponse {
     // check whether the browser already has the image cached locally
     let etag = header::EntityTag::strong(image.get_checksum_hex());
@@ -215,19 +219,28 @@ async fn start_poll_upstream(
 ///
 /// If polling from upstream fails, then it will automatically return 502 BAD GATEWAY to the user
 /// with the error as the body.
-async fn handle_cache_miss(gs: &Arc<GlobalState>, key: ImageKey, req_start: Timer) -> HttpResponse {
+async fn handle_cache_miss(
+    uid: &str,
+    gs: &Arc<GlobalState>,
+    key: ImageKey,
+    req_start: Timer,
+) -> HttpResponse {
     // poll upstream, finding the total time of the request
     let res = {
         let timer = Timer::start();
         let res = start_poll_upstream(&gs.backend, &key).await;
-        log::debug!("upstream TTFB: {}ms", timer.elapsed());
+        log::debug!("({}) upstream TTFB: {}ms", uid, timer.elapsed());
+        gs.metrics
+            .miss_request_process_seconds
+            .observe(timer.elapsed_secs() as f64);
         res
     };
     // handle any errors that happen with res
     let res = match res {
         Ok(res) => res,
         Err(e) => {
-            log::error!("unexpected upstream response: {}", e);
+            log::error!("unexpected upstream error before download ({})", e);
+            gs.metrics.failed_requests_total.inc();
             return HttpResponse::BadGateway().body("unexpected upstream response");
         }
     };
@@ -237,7 +250,10 @@ async fn handle_cache_miss(gs: &Arc<GlobalState>, key: ImageKey, req_start: Time
         StatusCode::OK => {}
         StatusCode::NOT_FOUND => return HttpResponse::NotFound().finish(),
         status => {
-            return HttpResponse::BadGateway().body(format!("invalid upstream code: {}", status))
+            log::error!("unexpected upstream status ({})", status);
+            gs.metrics.failed_requests_total.inc();
+            return HttpResponse::BadGateway()
+                .body(format!("invalid upstream status code: {}", status));
         }
     }
 

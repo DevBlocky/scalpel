@@ -74,8 +74,7 @@ impl Application {
             // structure and it wouldn't be wise to cyclically refer back to `GlobalState` inside
             // of the backend module
             let config = Arc::new(config);
-            let metrics = metrics::Metrics::new(config.prom_opt.clone().unwrap_or_default())
-                .expect("metrics intialize");
+            let metrics = metrics::Metrics::new().expect("metrics intialize");
 
             // may panic, but it's fine because it's before ping
             log::debug!("initializing cache...");
@@ -142,8 +141,13 @@ impl Application {
 
         let db_sz = self.gs.cache.report() as f64;
         let max_sz = self.gs.config.cache_size_mebibytes as f64 * 1024f64 * 1024f64;
-        log::info!("reported cache size: {:.2}MiB", db_sz / 1024f64 / 1024f64);
+        log::info!(
+            "reported cache size: {:.2}MiB ({:.2}%)",
+            db_sz / 1024f64 / 1024f64,
+            db_sz / max_sz * 100.0
+        );
         self.gs.metrics.cache_size.set(db_sz as i64);
+        self.gs.metrics.cache_max_size.set(max_sz as i64);
 
         // shrink database if reported size is above the maximum size reported in the config
         if db_sz > (max_sz * MAX_MULT) {

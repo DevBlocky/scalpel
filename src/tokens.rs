@@ -175,7 +175,7 @@ impl TokenVerifier {
     }
 
     /// Parse ciphertext and nonce bytes from provided token bytes.
-    fn token_to_cipher<'a>(token: &'a [u8]) -> Result<(box_::Nonce, &'a [u8]), TokenError> {
+    fn token_to_cipher(token: &[u8]) -> Result<(box_::Nonce, &[u8]), TokenError> {
         // prevents panic on slice because of short length
         if token.len() <= NONCE_SIZE {
             return Err(TokenError::TokenMalformed);

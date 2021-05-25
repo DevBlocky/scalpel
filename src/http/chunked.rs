@@ -58,10 +58,7 @@ impl BytesAgg {
     }
     #[inline]
     fn is_poisoned(&self) -> bool {
-        match self {
-            Self::Poisoned => true,
-            _ => false,
-        }
+        matches!(self, Self::Poisoned)
     }
 }
 

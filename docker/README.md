@@ -17,7 +17,7 @@ run it using docker compose instead.
 - Open a terminal or command prompt
 - Find the latest version at the [package](https://github.com/users/DevBlocky/packages/container/scalpel/versions)
   page. **DON'T** use the `main` version, it might be unstable!
-- Download the image using `docker pull ghcr.io/DevBlocky/scalpel:<version>`, replacing `<version>`
+- Download the image using `docker pull ghcr.io/devblocky/scalpel:<version>`, replacing `<version>`
   with the verion you want.
 - `cd` to the directory you want to run the container in
 - Copy the repo's [`settings.sample.yaml`](https://github.com/DevBlocky/scalpel/blob/main/settings.sample.yaml)
@@ -26,10 +26,10 @@ run it using docker compose instead.
 
 ```bash
 # This will run the client in your terminal. You can stop using CTRL+C.
-docker run -p 443:443 -v ./cache:/mangahome/cache -v ./settings.yaml:/mangahome/settings.yaml ghcr.io/blockba5her/scalpel:{version}
+docker run -p 443:443 -v ./cache:/mangahome/cache -v ./settings.yaml:/mangahome/settings.yaml ghcr.io/devblocky/scalpel:{version}
 
 # This will run the client as a background process.
-docker run -p 443:443 -v ./cache:/mangahome/cache -v ./settings.yaml:/mangahome/settings.yaml -d ghcr.io/blockba5her/scalpel:{version}
+docker run -p 443:443 -v ./cache:/mangahome/cache -v ./settings.yaml:/mangahome/settings.yaml -d ghcr.io/devblocky/scalpel:{version}
 # To stop the client, use the following command to list all docker instances
 docker ps
 # Then copy the ID of the one running scalpel and run

@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
     scalpel:
-        image: ghcr.io/DevBlocky/scalpel:{version}
+        image: ghcr.io/devblocky/scalpel:{version}
         container_name: scalpel
         ports:
             - 443:443

@@ -171,6 +171,7 @@ impl<E: Error> Drop for ChunkedUpstreamPoll<E> {
             .metrics
             .miss_request_process_seconds
             .observe(self.req_start.elapsed_secs() as f64);
+        self.gs.metrics.miss_requests_total.inc();
         self.gs.metrics.bytes_up.inc_by(bytes_len);
         self.gs.metrics.bytes_down.inc_by(bytes_len);
     }

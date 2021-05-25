@@ -231,7 +231,7 @@ async fn handle_cache_miss(
         let res = start_poll_upstream(&gs.backend, &key).await;
         log::debug!("({}) upstream TTFB: {}ms", uid, timer.elapsed());
         gs.metrics
-            .miss_request_process_seconds
+            .upstream_ttfb_seconds
             .observe(timer.elapsed_secs() as f64);
         res
     };

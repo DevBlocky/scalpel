@@ -30,6 +30,7 @@ struct PingResponse {
     token_key: String,
     compromised: bool,
     paused: bool,
+    client_id: String,
     tls: Option<TlsPayload>,
 }
 #[derive(Clone, serde::Deserialize)]
@@ -83,7 +84,7 @@ impl std::error::Error for BackendError {}
 struct PingStore {
     tls: TlsPayload,
     token_key: String,
-    upstream_url: Arc<String>,
+    upstream_url: Arc<reqwest::Url>,
 }
 pub struct Backend {
     config: Arc<AppConfig>,
@@ -222,7 +223,10 @@ impl Backend {
                 .map(TlsPayload::clone)
                 .unwrap(),
             token_key: res.token_key.clone(),
-            upstream_url: Arc::new(res.image_server.clone()),
+            // NOTE: if the below fails, there's something seriously wrong
+            upstream_url: Arc::new(
+                reqwest::Url::parse(&res.image_server).expect("malformed base upstream url"),
+            ),
         };
         self.ping_info.store(Arc::new(Some(info)));
 
@@ -269,7 +273,7 @@ impl Backend {
 
     /// Returns the upstream url stored from the API. Returns `None` if there has been no
     /// successful ping yet, and `Some` containing the upstream URL as provided up the API.
-    pub fn get_upstream(&self) -> Option<Arc<String>> {
+    pub fn get_upstream(&self) -> Option<Arc<reqwest::Url>> {
         let ping_info = self.ping_info.load();
         Option::as_ref(&ping_info).map(|x| Arc::clone(&x.upstream_url))
     }

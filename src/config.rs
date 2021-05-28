@@ -27,6 +27,8 @@ pub struct AppConfig {
     pub gzip_compress: bool,
     pub keep_alive: usize,
     pub enforce_secure_tls: bool,
+    #[serde(default)]
+    pub disable_ad_headers: bool,
 
     // info sent to external api
     pub external_ip: Option<String>,

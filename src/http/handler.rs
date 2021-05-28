@@ -169,11 +169,10 @@ async fn start_poll_upstream(
     use std::str::FromStr;
 
     let url = {
-        let upstream = backend.get_upstream().ok_or(NoUpstreamError)?;
+        let upstream_url = backend.get_upstream().ok_or(NoUpstreamError)?;
 
-        let base_url = reqwest::Url::parse(&upstream)?;
         reqwest::Url::options()
-            .base_url(Some(&base_url))
+            .base_url(Some(&upstream_url))
             .parse(&format!(
                 "/{}/{}/{}",
                 key.archive_name(),

@@ -78,6 +78,15 @@ keep_alive: 30
 # Just to clarify: Enabling this will cause higher failure rates for your client
 enforce_secure_tls: false
 
+# Enabling this will remove advertisement headers from all requests, making it impossible to
+# determine this node as an MD@H node.
+#
+# All (current) ad headers that will be removed:
+# Server
+# X-Version
+# X-Powered-By
+disable_ad_headers: false
+
 
 ### PING/EXTERNAL CONFIGURATION ###
 

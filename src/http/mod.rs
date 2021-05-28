@@ -113,13 +113,13 @@ impl std::fmt::Display for PortBindError {
 }
 impl std::error::Error for PortBindError {}
 
-// TODO: Doc
+/// Spawns an Actix HTTP server in this thread with the Ssl Acceptor provided
+///
+/// This will bind to the port provided in the configuration using OpenSSL.
 fn spawn_http_server(
     gs: Arc<GlobalState>,
     acceptor: ssl::SslAcceptorBuilder,
 ) -> Result<dev::Server, PortBindError> {
-    const COMPRESS: http::ContentEncoding = http::ContentEncoding::Identity;
-
     // obtain config options
     let server_info = format!(
         "{name} v{version} ({spec}) - {url}",
@@ -128,37 +128,39 @@ fn spawn_http_server(
         spec = c::SPEC,
         url = c::REPO_URL
     );
+    let ad_headers = !gs.config.disable_ad_headers;
     let bind_addr = format!("{}:{}", &gs.config.bind_address, gs.config.port);
-
-    // create the shared data object
     let data = web::Data::new(Arc::clone(&gs));
 
     // initialize server object
     let mut server = HttpServer::new(move || {
+        let mut default_headers = middleware::DefaultHeaders::new()
+            // Headers required by client spec
+            .header("X-Content-Type-Options", "nosniff")
+            .header("Access-Control-Allow-Origin", "*")
+            .header("Access-Control-Expose-Headers", "*")
+            .header("Cache-Control", "public, max-age=1209600")
+            .header("Timing-Allow-Origin", "*")
+            .header(
+                "X-Robots-Tag",
+                "noindex, noarchive, nosnippet, noimageindex",
+            );
+        // include Advertisement headers if enabled in configuration
+        if ad_headers {
+            default_headers = default_headers
+                .header("Server", &server_info)
+                .header("X-Powered-By", "Actix Web")
+                .header("X-Version", c::VERSION)
+        }
+
         App::new()
             .app_data(data.clone())
+            .wrap(default_headers)
+            .wrap(middleware::Compress::new(http::ContentEncoding::Identity))
             .wrap(
                 middleware::Logger::new("(%a) \"%r\" (status = %s, size = %bb) in %Dms")
                     .exclude("/prometheus"),
             )
-            .wrap(
-                middleware::DefaultHeaders::new()
-                    // Advertisement Headers
-                    .header("Server", &server_info)
-                    .header("X-Powered-By", "Actix Web")
-                    .header("X-Version", c::VERSION)
-                    // Headers required by client spec
-                    .header("X-Content-Type-Options", "nosniff")
-                    .header("Access-Control-Allow-Origin", "https://mangadex.org")
-                    .header("Access-Control-Expose-Headers", "*")
-                    .header("Cache-Control", "public, max-age=1209600")
-                    .header("Timing-Allow-Origin", "https://mangadex.org")
-                    .header(
-                        "X-Robots-Tag",
-                        "noindex, noarchive, nosnippet, noimageindex",
-                    ),
-            )
-            .wrap(middleware::Compress::new(COMPRESS))
             // regular MD@Home routes
             .route(
                 "/{token}/{archive_type}/{chap_hash}/{image}", // tokenized route

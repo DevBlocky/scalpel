@@ -3,7 +3,7 @@
 /// Constants that describe the MD@Home rust client
 pub mod constants {
     pub const PROG_NAME: &str = "Scalpel MD@Home";
-    pub const SPEC: u16 = 30;
+    pub const SPEC: u16 = 31;
     pub const VERSION: &str = env!("CARGO_PKG_VERSION");
     pub const REPO_URL: &str = env!("CARGO_PKG_REPOSITORY");
 }

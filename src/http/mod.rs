@@ -43,6 +43,19 @@ async fn md_service(
         .map(|x| x.to_string())
         .unwrap_or_else(|| "-".to_string());
 
+    // debug log the User-Agent header (or '-' if it isn't provided`)
+    if log::log_enabled!(log::Level::Debug) {
+        let user_agent = req
+            .headers()
+            .get(http::header::USER_AGENT)
+            .and_then(|x| x.to_str().ok());
+        log::debug!(
+            "({}) User-Agent: {}",
+            peer_addr,
+            user_agent.unwrap_or_else(|| "-")
+        );
+    }
+
     // stop early if archive type is not valid
     if path.archive_type != "data" && path.archive_type != "data-saver" {
         let fmt = format!(

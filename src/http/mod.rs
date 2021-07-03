@@ -52,7 +52,7 @@ async fn md_service(
         log::debug!(
             "({}) User-Agent: {}",
             peer_addr,
-            user_agent.unwrap_or_else(|| "-")
+            user_agent.unwrap_or("-")
         );
     }
 

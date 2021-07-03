@@ -49,11 +49,7 @@ async fn md_service(
             .headers()
             .get(http::header::USER_AGENT)
             .and_then(|x| x.to_str().ok());
-        log::debug!(
-            "({}) User-Agent: {}",
-            peer_addr,
-            user_agent.unwrap_or("-")
-        );
+        log::debug!("({}) User-Agent: {}", peer_addr, user_agent.unwrap_or("-"));
     }
 
     // stop early if archive type is not valid
@@ -243,8 +239,8 @@ impl HttpServerLifecycle {
     /// instance of `Self` if successful. Errors will be propagated up the stack.
     pub fn new(gs: Arc<GlobalState>, cert: &TlsPayload) -> Result<Self, Error> {
         // configures the SSL certificate with OpenSSL
-        let acceptor = Self::cert_payload_to_acceptor(cert, gs.config.enforce_secure_tls)
-            .map_err(Error::Acceptor)?;
+        let acceptor =
+            Self::create_openssl_acceptor(Arc::clone(&gs), cert).map_err(Error::Acceptor)?;
 
         // spawn the HTTP server and begin accepting requests
         let srv = spawn_http_server(Arc::clone(&gs), acceptor).map_err(Error::Port)?;
@@ -261,8 +257,8 @@ impl HttpServerLifecycle {
         // connections to close off first.
         self.shutdown(false).await;
 
-        let acceptor = Self::cert_payload_to_acceptor(cert, self.gs.config.enforce_secure_tls)
-            .map_err(Error::Acceptor)?;
+        let acceptor =
+            Self::create_openssl_acceptor(Arc::clone(&self.gs), cert).map_err(Error::Acceptor)?;
 
         let srv = spawn_http_server(Arc::clone(&self.gs), acceptor).map_err(Error::Port)?;
         self.actix = srv;
@@ -270,10 +266,32 @@ impl HttpServerLifecycle {
         Ok(())
     }
 
+    /// Checks the name provided by the client to make sure it matches either "localhost" or `client_url`.
+    ///
+    /// If this fails, it will return a fatal error which will immediately terminate the SSL connection.
+    fn check_sni(gs: &Arc<GlobalState>, ssl: &mut ssl::SslRef) -> Result<(), ssl::SniError> {
+        // obtain the hostname from the ping_info in backend
+        let info = gs.backend.ping_info.load();
+        let client_hostname = Option::as_ref(&info).and_then(|x| x.client_url.host_str());
+
+        // verify the servername equals "localhost" or the provided url from backend
+        match (ssl.servername(ssl::NameType::HOST_NAME), client_hostname) {
+            (Some("localhost"), _) => Ok(()),
+            (Some(servername), Some(client_servername)) => {
+                if servername == client_servername {
+                    Ok(())
+                } else {
+                    Err(ssl::SniError::ALERT_FATAL)
+                }
+            }
+            _ => Err(ssl::SniError::ALERT_FATAL),
+        }
+    }
+
     /// Converts a [`TLSPayload`] into an Ssl Builder that ActixWeb will use for TLS
-    fn cert_payload_to_acceptor(
+    fn create_openssl_acceptor(
+        gs: Arc<GlobalState>,
         cert: &TlsPayload,
-        secure_tls: bool,
     ) -> Result<ssl::SslAcceptorBuilder, ssl::Error> {
         use openssl::pkey::PKey;
         use openssl::rsa::Rsa;
@@ -297,16 +315,21 @@ impl HttpServerLifecycle {
         builder.check_private_key()?;
 
         // set minimum ssl version based on config
-        builder.set_min_proto_version(Some(if secure_tls {
+        builder.set_min_proto_version(Some(if gs.config.enforce_secure_tls {
             ssl::SslVersion::TLS1_2
         } else {
             ssl::SslVersion::TLS1
         }))?;
 
         // attempted optimizations
-        builder.set_read_ahead(true);
         builder.set_session_cache_mode(ssl::SslSessionCacheMode::SERVER);
-        builder.set_session_cache_size(1024 * 4); // 4000 sessions (instead of the default 20000)
+        builder.set_session_cache_size(1024 * 4); // 4096 sessions (instead of the default 20000)
+        builder.set_verify(ssl::SslVerifyMode::NONE);
+
+        // register SNI check to reject invalid connections (if enabled)
+        if gs.config.reject_invalid_sni {
+            builder.set_servername_callback(move |ssl, _| Self::check_sni(&gs, ssl));
+        }
 
         Ok(builder)
     }

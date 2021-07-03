@@ -87,6 +87,11 @@ enforce_secure_tls: false
 # X-Powered-By
 disable_ad_headers: false
 
+# Rejects potentially invalid connections before SSL negotiation
+# It is recommended to keep this on unless you are having issues with your client, or high failure rates.
+# Default is on
+reject_invalid_sni: true
+
 
 ### PING/EXTERNAL CONFIGURATION ###
 

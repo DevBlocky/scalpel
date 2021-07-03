@@ -81,21 +81,22 @@ impl std::fmt::Display for BackendError {
 impl std::error::Error for BackendError {}
 
 #[derive(Debug)]
-struct PingStore {
+pub struct PingStore {
     tls: TlsPayload,
     token_key: String,
-    upstream_url: Arc<reqwest::Url>,
+
+    pub upstream_url: url::Url,
+    pub client_url: url::Url,
 }
 pub struct Backend {
     config: Arc<AppConfig>,
     client: reqwest::Client,
 
-    ping_info: ArcSwap<Option<PingStore>>,
+    pub ping_info: ArcSwap<Option<PingStore>>,
 }
 
 lazy_static! {
-    static ref BASE_URL: reqwest::Url =
-        reqwest::Url::parse("https://api.mangadex.network").unwrap();
+    static ref BASE_URL: reqwest::Url = url::Url::parse("https://api.mangadex.network").unwrap();
 }
 impl Backend {
     /// Creates a skeleton [`Backend`] that is ready to start pinging. If no ping has been
@@ -155,7 +156,7 @@ impl Backend {
 
         // format URL and make the request to the server (handling any errors that happen in the
         // process)
-        let url = reqwest::Url::options()
+        let url = url::Url::options()
             .base_url(Some(&BASE_URL))
             .parse("/ping")?;
         let res = self
@@ -223,10 +224,11 @@ impl Backend {
                 .map(TlsPayload::clone)
                 .unwrap(),
             token_key: res.token_key.clone(),
+
             // NOTE: if the below fails, there's something seriously wrong
-            upstream_url: Arc::new(
-                reqwest::Url::parse(&res.image_server).expect("malformed base upstream url"),
-            ),
+            upstream_url: url::Url::parse(&res.image_server)
+                .expect("url parse: malformed image_server"),
+            client_url: url::Url::parse(&res.url).expect("url parse: malformed url"),
         };
         self.ping_info.store(Arc::new(Some(info)));
 
@@ -249,7 +251,7 @@ impl Backend {
 
         // format URL and make the request to the server (handling any errors that happen in the
         // process)
-        let url = reqwest::Url::options()
+        let url = url::Url::options()
             .base_url(Some(&BASE_URL))
             .parse("/stop")?;
         let res = self
@@ -269,12 +271,5 @@ impl Backend {
                 res.text().await.unwrap_or_else(|_| "NO BODY".to_string()),
             ))),
         }
-    }
-
-    /// Returns the upstream url stored from the API. Returns `None` if there has been no
-    /// successful ping yet, and `Some` containing the upstream URL as provided up the API.
-    pub fn get_upstream(&self) -> Option<Arc<reqwest::Url>> {
-        let ping_info = self.ping_info.load();
-        Option::as_ref(&ping_info).map(|x| Arc::clone(&x.upstream_url))
     }
 }

@@ -29,11 +29,16 @@ pub struct AppConfig {
     pub enforce_secure_tls: bool,
     #[serde(default)]
     pub disable_ad_headers: bool,
+    #[serde(default = "opt_reject_invalid_sni")]
+    pub reject_invalid_sni: bool,
 
     // info sent to external api
     pub external_ip: Option<String>,
     pub external_port: Option<u16>,
     pub external_max_speed: Option<u32>,
+}
+fn opt_reject_invalid_sni() -> bool {
+    true
 }
 
 /// Configuration for RocksDB cache engine

@@ -169,9 +169,12 @@ async fn start_poll_upstream(
     use std::str::FromStr;
 
     let url = {
-        let upstream_url = backend.get_upstream().ok_or(NoUpstreamError)?;
+        let info = backend.ping_info.load();
+        let upstream_url = Option::as_ref(&info)
+            .map(|x| &x.upstream_url)
+            .ok_or(NoUpstreamError)?;
 
-        reqwest::Url::options()
+        url::Url::options()
             .base_url(Some(&upstream_url))
             .parse(&format!(
                 "/{}/{}/{}",

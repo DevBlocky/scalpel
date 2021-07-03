@@ -37,3 +37,14 @@ impl Timer {
         self.elapsed() / 1000f32
     }
 }
+impl std::fmt::Display for Timer {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if fmt.alternate() {
+            // print seconds elapsed
+            write!(fmt, "{:.03}s", self.elapsed_secs())
+        } else {
+            // print milliseconds elapsed
+            write!(fmt, "{:.03}ms", self.elapsed())
+        }
+    }
+}

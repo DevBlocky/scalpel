@@ -270,12 +270,14 @@ impl HttpServerLifecycle {
     ///
     /// If this fails, it will return a fatal error which will immediately terminate the SSL connection.
     fn check_sni(gs: &Arc<GlobalState>, ssl: &mut ssl::SslRef) -> Result<(), ssl::SniError> {
+        let timer = utils::Timer::start();
+
         // obtain the hostname from the ping_info in backend
         let info = gs.backend.ping_info.load();
         let client_hostname = Option::as_ref(&info).and_then(|x| x.client_url.host_str());
 
         // verify the servername equals "localhost" or the provided url from backend
-        match (ssl.servername(ssl::NameType::HOST_NAME), client_hostname) {
+        let retval = match (ssl.servername(ssl::NameType::HOST_NAME), client_hostname) {
             (Some("localhost"), _) => Ok(()),
             (Some(servername), Some(client_servername)) => {
                 if servername == client_servername {
@@ -285,7 +287,13 @@ impl HttpServerLifecycle {
                 }
             }
             _ => Err(ssl::SniError::ALERT_FATAL),
-        }
+        };
+        log::debug!(
+            "sni verification performed in {} with result {:?}",
+            timer,
+            retval
+        );
+        retval
     }
 
     /// Converts a [`TLSPayload`] into an Ssl Builder that ActixWeb will use for TLS

@@ -160,7 +160,7 @@ impl<E: Error> Drop for ChunkedUpstreamPoll<E> {
 
             let timer = crate::utils::Timer::start();
             gs.cache.save(key, mime.to_string(), bytes).await;
-            log::debug!("cache save in {}ms", timer.elapsed());
+            log::debug!("cache save in {}", timer);
             gs.metrics
                 .cache_save_histo
                 .observe(timer.elapsed_secs() as f64);

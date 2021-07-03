@@ -34,7 +34,7 @@ pub(super) async fn response_from_cache(
     let cache_hit = {
         let timer = Timer::start();
         let cache_hit = gs.cache.load(&key).await;
-        log::debug!("({}) cache lookup in {}ms", uid, timer.elapsed());
+        log::debug!("({}) cache lookup in {}", uid, timer);
         gs.metrics
             .cache_load_seconds
             .observe(timer.elapsed_secs() as f64);
@@ -231,7 +231,7 @@ async fn handle_cache_miss(
     let res = {
         let timer = Timer::start();
         let res = start_poll_upstream(&gs.backend, &key).await;
-        log::debug!("({}) upstream TTFB: {}ms", uid, timer.elapsed());
+        log::debug!("({}) upstream TTFB: {}", uid, timer);
         gs.metrics
             .upstream_ttfb_seconds
             .observe(timer.elapsed_secs() as f64);

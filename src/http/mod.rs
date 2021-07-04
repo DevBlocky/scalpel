@@ -278,7 +278,7 @@ impl HttpServerLifecycle {
 
         // verify the servername equals "localhost" or the provided url from backend
         let retval = match (ssl.servername(ssl::NameType::HOST_NAME), client_hostname) {
-            (Some("localhost"), _) => Ok(()),
+            (Some("localhost" | "scalpel"), _) => Ok(()),
             (Some(servername), Some(client_servername)) => {
                 if servername == client_servername {
                     Ok(())

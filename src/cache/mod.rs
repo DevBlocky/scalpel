@@ -109,22 +109,24 @@ type Md5Bytes = [u8; 16];
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ImageEntry {
     // milliseconds since epoch
-    last_modified: u128,
+    save_time: u128,
     checksum: Md5Bytes,
     mime_type: String,
 
+    bytes_len: u64,
     bytes: Bytes,
 }
 
 impl ImageEntry {
-    pub fn new(bytes: Bytes, mime_type: String, last_modified: time::SystemTime) -> Self {
+    pub fn new(bytes: Bytes, mime_type: String, save_time: time::SystemTime) -> Self {
         Self {
-            last_modified: last_modified
+            save_time: save_time
                 .duration_since(time::UNIX_EPOCH)
                 .map(|x| x.as_millis())
                 .unwrap_or_default(),
             checksum: md5::compute(&bytes).into(),
             mime_type,
+            bytes_len: bytes.len() as u64,
             bytes,
         }
     }
@@ -143,6 +145,11 @@ impl ImageEntry {
     #[inline]
     pub fn get_bytes(&self) -> Bytes {
         self.bytes.clone()
+    }
+    /// Total length of the bytes that make up the image
+    #[inline]
+    pub fn get_bytes_len(&self) -> u64 {
+        self.bytes_len
     }
     /// Hexadecimal representation of the image checksum
     #[inline]

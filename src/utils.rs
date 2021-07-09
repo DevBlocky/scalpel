@@ -48,3 +48,12 @@ impl std::fmt::Display for Timer {
         }
     }
 }
+
+/// Time since epoch in milliseconds
+#[inline]
+pub fn now_as_millis() -> u64 {
+    time::SystemTime::now()
+        .duration_since(time::UNIX_EPOCH)
+        .map(|x| x.as_millis() as u64)
+        .unwrap_or(0)
+}

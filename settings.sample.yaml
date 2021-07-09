@@ -24,10 +24,12 @@ cache_engine: fs
 fs_options:
     # Self explanatory
     path: ./cache
+
     # KiB allocated for the in-memory read-write buffer
     # This generally is a good number except for very specific workloads
     # Default is 16KiB
     #rw_buffer_size: 16
+
     # Max MiB that of RAM that can be used for the in-memory cache
     # Default is 128MiB, 0 disables in-memory cache completely
     #lru_size_mebibytes: 128
@@ -36,16 +38,29 @@ fs_options:
 rocksdb_options:
     # Self explanatory
     path: ./cache
+
+    # Bloom filters can increase Get performance in clients, but also use more RAM than expected.
+    # Default is not disabled
+    #disable_bloom_filter: false
+
+    # The in-memory LRU size in mebibytes that RocksDB holds to help cache items for faster Gets.
+    # The amount of RAM used is about double this amount.
+    # Default is 64MiB
+    #lru_size: 64
+
     # The number of threads that RocksDB will use in the background for flushing and compaction
     # It is recommended to set this to the number of system threads you have
     # Default is 2
     #parallelism: 2
+
     # The in-memory write buffer size in mebibytes. Increasing this will generally increase performance
     # of bulk writes with the cost of using more RAM. (128MiB = ~1GB of RAM at peak)
     # Default is 64MiB
     #write_buffer_size: 64
+
     # The rate limit of writing to the disk in mebibytes/s. This will smooth out disk writes but will
     # use up more RAM in the process.
+    # This is off if the option is commented out.
     # Default is off
     #write_rate_limit: 24
 

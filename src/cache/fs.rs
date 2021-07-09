@@ -1,18 +1,9 @@
 use super::{ImageCache, ImageEntry, ImageKey};
 use crate::config::FsConfig;
+use crate::utils::now_as_millis;
 use bytes::Bytes;
 use std::convert::TryInto;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time;
-
-/// Time since epoch in milliseconds
-#[inline]
-fn now_as_millis() -> u64 {
-    time::SystemTime::now()
-        .duration_since(time::UNIX_EPOCH)
-        .map(|x| x.as_millis() as u64)
-        .unwrap_or(0)
-}
 
 #[derive(Debug)]
 pub enum CacheError {

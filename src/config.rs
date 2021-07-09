@@ -45,19 +45,16 @@ fn opt_reject_invalid_sni() -> bool {
 #[derive(Deserialize, Debug)]
 pub struct RocksConfig {
     pub path: String,
-    #[serde(default = "rocksce_parallelism")]
-    pub parallelism: i32,
-    #[serde(default = "rocksce_write_buf_sz")]
-    pub write_buffer_size: usize,
+
+    // block options
+    #[serde(default)]
+    pub disable_bloom_filter: bool,
+    pub lru_size: Option<usize>,
+
+    // db options
+    pub parallelism: Option<i32>,
+    pub write_buffer_size: Option<usize>,
     pub write_rate_limit: Option<usize>,
-}
-#[inline]
-fn rocksce_parallelism() -> i32 {
-    2
-}
-#[inline]
-fn rocksce_write_buf_sz() -> usize {
-    64
 }
 
 /// Configuration for FileSystem cache engine

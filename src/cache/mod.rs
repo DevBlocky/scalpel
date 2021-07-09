@@ -4,6 +4,7 @@ use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time;
+use sha2::Digest;
 
 // re-export different caches
 #[cfg(feature = "ce-filesystem")]
@@ -76,12 +77,12 @@ impl ImageKey {
     ///
     /// Essentially calculates the md5 hash of the chapter hash and image name together, taking
     /// into account if the image is data-saver
-    pub fn as_bkey(&self) -> Md5Bytes {
-        let mut ctx = md5::Context::new();
-        ctx.consume([self.data_saver() as u8]);
-        ctx.consume(self.chapter());
-        ctx.consume(self.image());
-        ctx.compute().into()
+    pub fn as_bkey(&self) -> [u8; 32] {
+        let mut ctx = sha2::Sha256::new();
+        ctx.update([self.data_saver() as u8]);
+        ctx.update(self.chapter());
+        ctx.update(self.image());
+        ctx.finalize().into()
     }
 }
 
@@ -97,7 +98,6 @@ impl std::fmt::Display for ImageKey {
     }
 }
 
-type Md5Bytes = [u8; 16];
 /// A structure representing the data of an image in cache
 ///
 /// This structure contains the data that makes up an image, with additional information included
@@ -110,7 +110,7 @@ type Md5Bytes = [u8; 16];
 pub struct ImageEntry {
     // milliseconds since epoch
     save_time: u128,
-    checksum: Md5Bytes,
+    checksum: [u8; 32],
     mime_type: String,
 
     bytes_len: u64,
@@ -119,12 +119,15 @@ pub struct ImageEntry {
 
 impl ImageEntry {
     pub fn new(bytes: Bytes, mime_type: String, save_time: time::SystemTime) -> Self {
+        let mut ctx = sha2::Sha256::new();
+        ctx.update(&bytes);
+
         Self {
             save_time: save_time
                 .duration_since(time::UNIX_EPOCH)
                 .map(|x| x.as_millis())
                 .unwrap_or_default(),
-            checksum: md5::compute(&bytes).into(),
+            checksum: ctx.finalize().into(),
             mime_type,
             bytes_len: bytes.len() as u64,
             bytes,

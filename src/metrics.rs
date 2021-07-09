@@ -35,35 +35,13 @@ macro_rules! ms {
 }
 
 /// Default prometheus buckets for cache operations
-const CACHE_DEFAULT_BUCKETS: &[f64] = &ms![
-    1.0,
-    2.5,
-    5.0,
-    7.5,
-    10.0,
-    15.0,
-    30.0,
-    50.0,
-    100.0,
-    150.0,
-    250.0,
-    500.0,
-];
+const CACHE_DEFAULT_BUCKETS: &[f64] =
+    &ms![1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 30.0, 50.0, 100.0, 150.0, 250.0, 500.0,];
 /// Default prometheus buckets for response process durations
 const PROCESS_DEFAULT_BUCKETS: &[f64] = &ms![
     // these should generally apply to HITs
-    1.0,
-    2.5,
-    10.0,
-    25.0,
-    75.0,
-    // these should generally apply to MISSes
-    300.0,
-    500.0,
-    750.0,
-    1000.0,
-    2000.0,
-    5000.0,
+    1.0, 2.5, 10.0, 25.0, 75.0, // these should generally apply to MISSes
+    300.0, 500.0, 750.0, 1000.0, 2000.0, 5000.0,
 ];
 
 create_metrics!(

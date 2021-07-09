@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use bytes::Bytes;
+use sha2::Digest;
 use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time;
-use sha2::Digest;
 
 // re-export different caches
 #[cfg(feature = "ce-filesystem")]

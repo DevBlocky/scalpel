@@ -24,7 +24,6 @@ pub struct AppConfig {
     pub port: u16,
     pub bind_address: String,
     pub worker_threads: Option<usize>,
-    pub gzip_compress: bool,
     pub keep_alive: usize,
     pub enforce_secure_tls: bool,
     #[serde(default)]

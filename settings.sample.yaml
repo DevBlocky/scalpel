@@ -76,10 +76,6 @@ bind_address: 0.0.0.0
 # Uncomment to enable, otherwise the number of logical cores your CPU has will be used
 #worker_threads: 18
 
-# Compress images sent to client using the gzip algorithm (only applies to cache HITs)
-# Enabling this might increase download speed slightly but will affect CPU perf and TTFB
-gzip_compress: false
-
 # The number of seconds the server should keep keep-alive connections for
 # before forcefully closing them
 keep_alive: 30

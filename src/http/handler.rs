@@ -9,9 +9,7 @@ use crate::cache::ImageKey;
 use crate::utils::Timer;
 use crate::GlobalState;
 use actix_web::{
-    dev::BodyEncoding,
     http::{
-        self,
         header::{self, HttpDate},
         StatusCode,
     },
@@ -100,19 +98,6 @@ fn handle_cache_hit(
     if is_client_cached {
         log::debug!("({}) browser cache HIT", uid);
         return res.status(StatusCode::NOT_MODIFIED).finish();
-    }
-
-    // set the encoding to gzip if it is enabled by the client and the browser supports/accepts it
-    if gs.config.gzip_compress {
-        if let Some(accept) = req
-            .headers()
-            .get(&header::ACCEPT_ENCODING)
-            .and_then(|h| h.to_str().ok())
-        {
-            if accept.contains("gzip") {
-                res.encoding(http::ContentEncoding::Gzip);
-            }
-        }
     }
 
     // stream the data to the client

@@ -165,7 +165,6 @@ fn spawn_http_server(
         App::new()
             .app_data(data.clone())
             .wrap(default_headers)
-            .wrap(middleware::Compress::new(http::ContentEncoding::Identity))
             .wrap(
                 middleware::Logger::new("(%a) \"%r\" (status = %s, size = %bb) in %Dms")
                     .exclude("/prometheus"),

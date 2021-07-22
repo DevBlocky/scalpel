@@ -11,6 +11,8 @@ pub struct AppConfig {
     pub max_grace_period: i32,
     #[serde(default)]
     pub skip_tokens: bool,
+    #[serde(default)]
+    pub disable_ssl: bool,
 
     // cache configuration
     pub cache_size_mebibytes: u32,

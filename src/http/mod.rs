@@ -193,10 +193,13 @@ fn spawn_http_server(
         server = server.workers(worker_threads);
     }
 
-    server
-        .bind_openssl(&bind_addr, acceptor)
-        .map_err(PortBindError)
-        .map(|s| s.run())
+    if gs.config.disable_ssl {
+        server.bind(&bind_addr)
+    } else {
+        server.bind_openssl(&bind_addr, acceptor)
+    }
+    .map_err(PortBindError)
+    .map(|s| s.run())
 }
 
 /// Error that represents all of the addressable errors of creating the HTTP Server.

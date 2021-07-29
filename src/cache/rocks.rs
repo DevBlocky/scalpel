@@ -115,7 +115,7 @@ impl RocksCache {
     }
 
     /// Obtains a ColumnFamily by name. Panics if the name provided does not exist.
-    fn cf_by_name(&self, name: &'static str) -> BoundColumnFamily {
+    fn cf_by_name(&self, name: &'static str) -> Arc<BoundColumnFamily> {
         self.db.cf_handle(name).expect("cf handle name invalid")
     }
 
@@ -125,7 +125,7 @@ impl RocksCache {
 
         let iter = self
             .db
-            .iterator_cf(self.cf_by_name(Self::META_CF), IteratorMode::Start);
+            .iterator_cf(&self.cf_by_name(Self::META_CF), IteratorMode::Start);
         for (key, val) in iter {
             // attempt to deserialize the data and add the size to the `sz` iterator
             if let Ok(entry) = bincode::deserialize::<ImageEntry>(&val).map_err(CacheError::Bincode)
@@ -160,10 +160,10 @@ impl RocksCache {
     // Drops an entry from the data and metadata column families.
     fn drop_entry(&self, key: &[u8]) -> Result<(), CacheError> {
         self.db
-            .delete_cf(self.cf_by_name(Self::IMAGES_CF), key)
+            .delete_cf(&self.cf_by_name(Self::IMAGES_CF), key)
             .map_err(CacheError::Rocks)?;
         self.db
-            .delete_cf(self.cf_by_name(Self::META_CF), key)
+            .delete_cf(&self.cf_by_name(Self::META_CF), key)
             .map_err(CacheError::Rocks)?;
         Ok(())
     }
@@ -194,7 +194,7 @@ impl RocksCache {
             let cf = db.cf_handle(cf_name).expect("cf_handle non-existant");
 
             // place the entry into the database
-            db.put_cf(cf, &key, &val).map_err(CacheError::Rocks)
+            db.put_cf(&cf, &key, &val).map_err(CacheError::Rocks)
         })
         .await
     }
@@ -209,7 +209,7 @@ impl RocksCache {
             let cf = db.cf_handle(cf_name).expect("cf_handle non-existant");
 
             // fetch from the db and convert from Vec<u8> to Bytes
-            db.get_cf(cf, &key)
+            db.get_cf(&cf, &key)
                 .map(|x| x.map(|x| Bytes::from(x)))
                 .map_err(CacheError::Rocks)
         })
@@ -315,7 +315,7 @@ impl RocksCache {
 
         let iter = self
             .db
-            .iterator_cf(self.cf_by_name(Self::META_CF), IteratorMode::Start);
+            .iterator_cf(&self.cf_by_name(Self::META_CF), IteratorMode::Start);
         for (key, val) in iter {
             // deserialize the metadata entry, if it fails then drop it from db
             let entry = match bincode::deserialize::<ImageEntry>(&val) {

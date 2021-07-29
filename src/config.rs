@@ -28,11 +28,15 @@ pub struct AppConfig {
     pub bind_address: String,
     pub worker_threads: Option<usize>,
     pub keep_alive: usize,
-    pub enforce_secure_tls: bool,
     #[serde(default)]
     pub disable_ad_headers: bool,
+
+    // ssl/tls settings
     #[serde(default = "opt_reject_invalid_sni")]
     pub reject_invalid_sni: bool,
+    pub enforce_secure_tls: bool,
+    pub ssl_ciphersuites: Option<String>,
+    pub ssl_cipher_list: Option<String>,
 
     // info sent to external api
     pub external_ip: Option<String>,

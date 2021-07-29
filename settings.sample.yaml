@@ -80,15 +80,6 @@ bind_address: 0.0.0.0
 # before forcefully closing them
 keep_alive: 30
 
-# Enabling this feature will enforce TLS1.2+ for SSL. On one hand, the TLS1 and 1.1 protos are
-# insecure and obsolete, but on the other hand some MD users still use old technology.
-#
-# > "All the chumps [use old TLS] on shitty older apple stuff, clinging to it like it was
-# > the last birthday present they were giving by steve jobs himself" - Ai 2021
-#
-# Just to clarify: Enabling this will cause higher failure rates for your client
-enforce_secure_tls: false
-
 # Enabling this will remove advertisement headers from all requests, making it impossible to
 # determine this node as an MD@H node.
 #
@@ -98,10 +89,30 @@ enforce_secure_tls: false
 # X-Powered-By
 disable_ad_headers: false
 
+
+### SSL CONFIGURATION ###
+
 # Rejects potentially invalid connections before SSL negotiation
 # It is recommended to keep this on unless you are having issues with your client, or high failure rates.
 # Default is on
 reject_invalid_sni: true
+
+# Enabling this feature will enforce TLS1.2+ for SSL. On one hand, the TLS1 and 1.1 protos are
+# insecure and obsolete, but on the other hand some MD users still use old technology.
+#
+# > "All the chumps [use old TLS] on shitty older apple stuff, clinging to it like it was
+# > the last birthday present they were giving by steve jobs himself" - Ai 2021
+#
+# Just to clarify: Enabling this will cause higher failure rates for your client
+enforce_secure_tls: false
+
+# The colon-separated ciphersuites that will be used on TLS1.3 connections.
+# See https://wiki.mozilla.org/Security/Server_Side_TLS for options
+#ssl_ciphersuites: ""
+
+# The colon-separated ciphersuites that will be used on TLS1 - TLS1.2 connections.
+# See https://wiki.mozilla.org/Security/Server_Side_TLS for options
+#ssl_cipher_list: ""
 
 
 ### PING/EXTERNAL CONFIGURATION ###

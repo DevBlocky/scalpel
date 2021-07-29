@@ -57,3 +57,39 @@ pub fn now_as_millis() -> u64 {
         .map(|x| x.as_millis() as u64)
         .unwrap_or(0)
 }
+
+/// Struct that contains a secret of the client.
+///
+/// The struct will simply store the secret and allow for serialization/deserialization
+/// without divulging the secret in debug outputs.
+#[derive(Clone)]
+pub struct Secret<T>(pub T);
+
+impl<T> std::fmt::Debug for Secret<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Hidden").finish()
+    }
+}
+impl<T> std::ops::Deref for Secret<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: serde::Serialize> serde::Serialize for Secret<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+impl<'de, T: serde::Deserialize<'de>> serde::Deserialize<'de> for Secret<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        T::deserialize(deserializer).map(Secret)
+    }
+}

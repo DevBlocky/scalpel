@@ -1,3 +1,4 @@
+use crate::utils::Secret;
 use serde::Deserialize;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -7,7 +8,7 @@ use tokio::fs;
 #[derive(Deserialize, Debug)]
 pub struct AppConfig {
     // basic client configuration
-    pub client_secret: String,
+    pub client_secret: Secret<String>,
     pub max_grace_period: i32,
     #[serde(default)]
     pub skip_tokens: bool,

@@ -1,5 +1,6 @@
 use crate::config::AppConfig;
 use crate::utils::constants as c;
+use crate::utils::Secret;
 use arc_swap::ArcSwap;
 use lazy_static::lazy_static;
 use std::sync::Arc;
@@ -13,7 +14,7 @@ use std::time::Duration;
 // https://api.mangadex.network/ping
 #[derive(serde::Serialize, Debug)]
 struct PingRequest {
-    secret: String,
+    secret: Secret<String>,
     port: u16,
     disk_space: u64,
     network_speed: u64,
@@ -54,7 +55,7 @@ impl std::fmt::Debug for TlsPayload {
 // https://api.mangadex.network/stop
 #[derive(serde::Serialize)]
 struct StopRequest<'a> {
-    secret: &'a str,
+    secret: Secret<&'a str>,
 }
 #[derive(serde::Deserialize)]
 struct StopResponse;
@@ -139,7 +140,7 @@ impl Backend {
                 .map(|x| x.tls.created_at.clone());
 
             PingRequest {
-                secret: self.config.client_secret.clone(),
+                secret: Secret::clone(&self.config.client_secret),
                 disk_space: self.config.cache_size_mebibytes as u64 * 1024 * 1024,
                 port: self.config.external_port.unwrap_or(self.config.port),
                 network_speed: self
@@ -246,7 +247,7 @@ impl Backend {
     pub async fn stop(&self) -> Result<(), Box<dyn std::error::Error>> {
         // create payload for JSON request
         let payload = StopRequest {
-            secret: &self.config.client_secret,
+            secret: Secret(&self.config.client_secret),
         };
 
         // format URL and make the request to the server (handling any errors that happen in the

@@ -210,7 +210,7 @@ impl RocksCache {
 
             // fetch from the db and convert from Vec<u8> to Bytes
             db.get_cf(&cf, &key)
-                .map(|x| x.map(|x| Bytes::from(x)))
+                .map(|x| x.map(Bytes::from))
                 .map_err(CacheError::Rocks)
         })
         .await
@@ -276,7 +276,7 @@ impl RocksCache {
             let queue = self.find_top_entries(256, |x, y| y.save_time.cmp(&x.save_time))?;
 
             // how did we get here? we'll break anyways but how
-            if queue.len() == 0 {
+            if queue.is_empty() {
                 log::debug!("how did we get here?");
                 break;
             }
@@ -303,6 +303,7 @@ impl RocksCache {
     /// comparator provided.
     ///
     /// WARNING: This function is not fast and it's not intended to be fast. Use with care.
+    #[allow(clippy::type_complexity)]
     fn find_top_entries<C>(
         &self,
         n: usize,
@@ -380,7 +381,6 @@ impl ImageCache for RocksCache {
     async fn shrink(&self, min: u64) -> Result<u64, ()> {
         self.evict_entries_fifo(min).map_err(|e| {
             log::error!("fatal error occurred while shrinking RocksDb: {}", e);
-            ()
         })
     }
 }

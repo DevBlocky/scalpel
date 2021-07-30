@@ -10,7 +10,6 @@ use openssl::ssl;
 use std::io;
 use std::sync::{atomic, Arc};
 
-mod chunked;
 mod handler;
 
 #[derive(serde::Deserialize)]

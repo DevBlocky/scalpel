@@ -324,12 +324,11 @@ impl HttpServerLifecycle {
         builder.set_private_key(PKey::from_rsa(priv_key)?.as_ref())?;
         builder.check_private_key()?;
 
-        // set minimum ssl version based on config
-        builder.set_min_proto_version(Some(if gs.config.enforce_secure_tls {
-            ssl::SslVersion::TLS1_2
-        } else {
-            ssl::SslVersion::TLS1
-        }))?;
+        // enable TLSv1 and TLSv1.1 if we're not enforcing secure TLS versions
+        if !gs.config.enforce_secure_tls {
+            builder.clear_options(ssl::SslOptions::NO_TLSV1 | ssl::SslOptions::NO_TLSV1_1);
+        }
+
 
         // set ssl suites based on configuration
         builder.set_ciphersuites(
@@ -343,6 +342,7 @@ impl HttpServerLifecycle {
                 .as_deref()
                 .unwrap_or("ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384")
         )?;
+        builder.set_options(ssl::SslOptions::CIPHER_SERVER_PREFERENCE);
 
         // attempted optimizations
         builder.set_session_cache_mode(ssl::SslSessionCacheMode::SERVER);
@@ -354,6 +354,7 @@ impl HttpServerLifecycle {
             builder.set_servername_callback(move |ssl, _| Self::check_sni(&gs, ssl));
         }
 
+        log::debug!("ssl options: {:?}", builder.options());
         Ok(builder)
     }
 

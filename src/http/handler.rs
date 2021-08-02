@@ -89,8 +89,7 @@ fn handle_cache_hit(
     let mut res = HttpResponse::build(StatusCode::OK);
     res.append_header(header::ContentType(image.get_mime()))
         .append_header(header::ETag(etag))
-        .append_header(("Vary", "Accept-Encoding"))
-        .append_header(("X-Cache", "HIT"));
+        .append_header(("Vary", "Accept-Encoding"));
 
     // if the image is already cached in the browser, then we can just return the associated code
     // telling the browser that it doesn't need to download anything
@@ -285,6 +284,5 @@ async fn handle_cache_miss(
     HttpResponse::Ok()
         .append_header(header::ContentType(res.content_type))
         .append_header(header::LastModified(res.last_modified))
-        .append_header(("X-Cache", "MISS"))
         .streaming(chunked)
 }

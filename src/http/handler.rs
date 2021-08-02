@@ -159,7 +159,7 @@ async fn start_poll_upstream(
             .ok_or(NoUpstreamError)?;
 
         url::Url::options()
-            .base_url(Some(&upstream_url))
+            .base_url(Some(upstream_url))
             .parse(&format!(
                 "/{}/{}/{}",
                 key.archive_name(),

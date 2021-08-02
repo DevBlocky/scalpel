@@ -335,14 +335,12 @@ impl HttpServerLifecycle {
         builder.set_ciphersuites(
             gs.config
                 .ssl_ciphersuites
-                .as_ref()
-                .map(String::as_str)
+                .as_deref()
                 .unwrap_or("TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384"),
         )?;
         builder.set_cipher_list(
                 gs.config.ssl_cipher_list
-                .as_ref()
-                .map(String::as_str)
+                .as_deref()
                 .unwrap_or("ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384")
         )?;
 

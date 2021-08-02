@@ -307,7 +307,7 @@ impl HttpServerLifecycle {
         use openssl::rsa::Rsa;
         use openssl::x509::X509;
 
-        let mut builder = ssl::SslAcceptor::mozilla_intermediate(ssl::SslMethod::tls_server())?;
+        let mut builder = ssl::SslAcceptor::mozilla_intermediate_v5(ssl::SslMethod::tls_server())?;
 
         // push the full-chain certificate into the SslAcceptorBuilder
         let full_chain = X509::stack_from_pem(cert.certificate.as_bytes())?;

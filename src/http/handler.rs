@@ -16,8 +16,7 @@ use actix_web::{
     HttpRequest, HttpResponse,
 };
 use lazy_static::lazy_static;
-use std::sync::Arc;
-use std::time;
+use std::{sync::Arc, time, time::Duration};
 
 /// Generates an [`HttpResponse`] by querying the cache and either returning HIT data or polling
 /// upstream, proxying, and saving the result on MISS.
@@ -113,7 +112,7 @@ lazy_static! {
     static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         // if a request exceeds 5 minutes, that's big yikes
-        .timeout(time::Duration::from_secs(300))
+        .timeout(Duration::from_secs(300))
         .build()
         .expect("misconfigured lazy_static http client");
 }
@@ -201,6 +200,34 @@ async fn start_poll_upstream(
     })
 }
 
+/// Will attempt to retry `start_poll_upstream` until a successful result is returned
+/// or the total requests meets/exceeds the `retry` parameter.
+async fn start_poll_upstream_retry(
+    backend: &Backend,
+    key: &ImageKey,
+    retry: usize,
+) -> Result<UpstreamResponse, Box<dyn std::error::Error>> {
+    let mut count = 0;
+    loop {
+        let res = start_poll_upstream(backend, key).await;
+
+        // end the function with the result value if the result is good OR
+        // the counter exceeds retry
+        count += 1;
+        if res.is_ok() || count >= retry {
+            return res;
+        }
+
+        // log if an error occurs (as a warning, because it will be retried)
+        if let Err(ref e) = res {
+            log::warn!("failure during upstream poll (will retry): {}", e);
+        }
+
+        // we got here because the request failed, so lets wait a bit...
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
 /// Handles a cache MISS by requesting the image from the upstream and streaming the image to the
 /// user using [`ChunkedUpstreamPoll`]
 ///
@@ -215,7 +242,7 @@ async fn handle_cache_miss(
     // poll upstream, finding the total time of the request
     let res = {
         let timer = Timer::start();
-        let res = start_poll_upstream(&gs.backend, &key).await;
+        let res = start_poll_upstream_retry(&gs.backend, &key, 3).await;
         log::debug!("({}) upstream TTFB: {}", uid, timer);
         gs.metrics
             .upstream_ttfb_seconds
@@ -255,10 +282,9 @@ async fn handle_cache_miss(
     );
 
     // proxy the image to the client
-    let mut http_res = HttpResponse::Ok();
-    http_res
+    HttpResponse::Ok()
         .append_header(header::ContentType(res.content_type))
         .append_header(header::LastModified(res.last_modified))
-        .append_header(("X-Cache", "MISS"));
-    http_res.streaming(chunked)
+        .append_header(("X-Cache", "MISS"))
+        .streaming(chunked)
 }

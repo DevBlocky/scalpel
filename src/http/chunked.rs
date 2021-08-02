@@ -44,10 +44,15 @@ impl BytesAgg {
     /// Will return `None` on Poisoned or Taken
     #[inline]
     fn take(&mut self) -> Option<Bytes> {
+        // if it isn't stable, then prematurely return
+        if !matches!(self, Self::Stable(_)) {
+            return None;
+        }
+
         let last = std::mem::replace(self, Self::Taken);
         match last {
             Self::Stable(x) => Some(x.freeze()),
-            _ => None,
+            _ => unsafe { std::hint::unreachable_unchecked() },
         }
     }
 

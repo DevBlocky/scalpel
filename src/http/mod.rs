@@ -326,22 +326,25 @@ impl HttpServerLifecycle {
 
         // enable TLSv1 and TLSv1.1 if we're not enforcing secure TLS versions
         if !gs.config.enforce_secure_tls {
+            // use the mozilla old standard for ciphersuites
+            // by default, this is the mozilla intermediate standard which won't work with TLSv1(.1)
+            builder.set_cipher_list(
+                "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:\
+                ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:\
+                ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:\
+                DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-CHACHA20-POLY1305:\
+                ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA:\
+                ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:\
+                ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA256:\
+                DHE-RSA-AES256-SHA256:AES128-GCM-SHA256:AES256-GCM-SHA384:\
+                AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:DES-CBC3-SHA",
+            )?;
             builder.clear_options(ssl::SslOptions::NO_TLSV1 | ssl::SslOptions::NO_TLSV1_1);
+            builder.set_min_proto_version(Some(ssl::SslVersion::TLS1))?;
         }
 
-
-        // set ssl suites based on configuration
-        builder.set_ciphersuites(
-            gs.config
-                .ssl_ciphersuites
-                .as_deref()
-                .unwrap_or("TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384"),
-        )?;
-        builder.set_cipher_list(
-                gs.config.ssl_cipher_list
-                .as_deref()
-                .unwrap_or("ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384")
-        )?;
+        // always use the server preference for ciphersuites
+        // this will use faster algos
         builder.set_options(ssl::SslOptions::CIPHER_SERVER_PREFERENCE);
 
         // attempted optimizations

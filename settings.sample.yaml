@@ -106,14 +106,6 @@ reject_invalid_sni: true
 # Just to clarify: Enabling this will cause higher failure rates for your client
 enforce_secure_tls: false
 
-# The colon-separated ciphersuites that will be used on TLS1.3 connections.
-# See https://wiki.mozilla.org/Security/Server_Side_TLS for options
-#ssl_ciphersuites: ""
-
-# The colon-separated ciphersuites that will be used on TLS1 - TLS1.2 connections.
-# See https://wiki.mozilla.org/Security/Server_Side_TLS for options
-#ssl_cipher_list: ""
-
 
 ### PING/EXTERNAL CONFIGURATION ###
 

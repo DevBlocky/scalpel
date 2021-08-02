@@ -35,8 +35,6 @@ pub struct AppConfig {
     #[serde(default = "opt_reject_invalid_sni")]
     pub reject_invalid_sni: bool,
     pub enforce_secure_tls: bool,
-    pub ssl_ciphersuites: Option<String>,
-    pub ssl_cipher_list: Option<String>,
 
     // info sent to external api
     pub external_ip: Option<String>,

@@ -3,6 +3,8 @@
 //! Module will handle HIT or MISS images by calling DB. On HIT, will simply stream the image, and
 //! on MISS, will download the image from upstream, save it, then stream it.
 
+use super::chunked::{ChunkedUpstreamPoll, UpstreamStream};
+use crate::backend::Backend;
 use crate::cache::ImageKey;
 use crate::utils::Timer;
 use crate::GlobalState;
@@ -13,7 +15,6 @@ use actix_web::{
     },
     HttpRequest, HttpResponse,
 };
-use bytes::Bytes;
 use lazy_static::lazy_static;
 use std::sync::Arc;
 use std::time;
@@ -132,7 +133,8 @@ impl std::error::Error for NoUpstreamError {}
 
 /// A structure that includes all of the data needed to stream a response back to the client.
 struct UpstreamResponse {
-    bytes: Bytes,
+    stream: Box<UpstreamStream<reqwest::Error>>,
+    size_hint: Option<usize>,
 
     status: StatusCode,
     content_type: mime::Mime,
@@ -145,15 +147,14 @@ struct UpstreamResponse {
 /// bytes representing the body of the request.
 ///
 /// This function will return on first byte received
-async fn download_entry_from_upstream(
-    uid: &str,
-    gs: &GlobalState,
+async fn start_poll_upstream(
+    backend: &Backend,
     key: &ImageKey,
 ) -> Result<UpstreamResponse, Box<dyn std::error::Error>> {
     use std::str::FromStr;
 
     let url = {
-        let info = gs.backend.ping_info.load();
+        let info = backend.ping_info.load();
         let upstream_url = Option::as_ref(&info)
             .map(|x| &x.upstream_url)
             .ok_or(NoUpstreamError)?;
@@ -168,15 +169,7 @@ async fn download_entry_from_upstream(
             ))?
     };
 
-    let res = {
-        let timer = Timer::start();
-        let res = HTTP_CLIENT.get(url).send().await?;
-        log::debug!("({}) upstream TTFB: {}", uid, timer);
-        gs.metrics
-            .upstream_ttfb_seconds
-            .observe(timer.elapsed_secs() as f64);
-        res
-    };
+    let res = HTTP_CLIENT.get(url).send().await?;
     let status = res.status();
 
     // get the mime type from upstream, or try to guess
@@ -197,8 +190,10 @@ async fn download_entry_from_upstream(
         .and_then(|x| HttpDate::from_str(x).ok())
         .unwrap_or_else(|| HttpDate::from(time::SystemTime::now()));
 
+    let size_hint = res.content_length().map(|x| x as usize);
     Ok(UpstreamResponse {
-        bytes: res.bytes().await?,
+        stream: Box::new(res.bytes_stream()),
+        size_hint,
 
         status,
         content_type,
@@ -218,13 +213,20 @@ async fn handle_cache_miss(
     req_start: Timer,
 ) -> HttpResponse {
     // poll upstream, finding the total time of the request
-    let res = download_entry_from_upstream(uid, gs, &key).await;
-
+    let res = {
+        let timer = Timer::start();
+        let res = start_poll_upstream(&gs.backend, &key).await;
+        log::debug!("({}) upstream TTFB: {}", uid, timer);
+        gs.metrics
+            .upstream_ttfb_seconds
+            .observe(timer.elapsed_secs() as f64);
+        res
+    };
     // handle any errors that happen with res
     let res = match res {
         Ok(res) => res,
         Err(e) => {
-            log::error!("unexpected upstream error ({})", e);
+            log::error!("unexpected upstream error before download ({})", e);
             gs.metrics.failed_requests_total.inc();
             return HttpResponse::BadGateway().body("unexpected upstream response");
         }
@@ -242,25 +244,15 @@ async fn handle_cache_miss(
         }
     }
 
-    // update all metrics
-    gs.metrics
-        .miss_request_process_seconds
-        .observe(req_start.elapsed_secs() as f64);
-    gs.metrics.miss_requests_total.inc();
-    gs.metrics.bytes_up.inc_by(res.bytes.len() as u64);
-    gs.metrics.bytes_down.inc_by(res.bytes.len() as u64);
-
-    // save to cache
-    {
-        let timer = Timer::start();
-        gs.cache
-            .save(&key, res.content_type.to_string(), Bytes::clone(&res.bytes))
-            .await;
-        log::debug!("({}) cache save in {}", uid, timer);
-        gs.metrics
-            .cache_save_histo
-            .observe(timer.elapsed_secs() as f64);
-    }
+    // create the chunk stream
+    let chunked = ChunkedUpstreamPoll::new(
+        gs,
+        key,
+        res.content_type.clone(),
+        res.stream,
+        res.size_hint.unwrap_or(0),
+        req_start,
+    );
 
     // proxy the image to the client
     let mut http_res = HttpResponse::Ok();
@@ -268,5 +260,5 @@ async fn handle_cache_miss(
         .append_header(header::ContentType(res.content_type))
         .append_header(header::LastModified(res.last_modified))
         .append_header(("X-Cache", "MISS"));
-    http_res.body(res.bytes)
+    http_res.streaming(chunked)
 }

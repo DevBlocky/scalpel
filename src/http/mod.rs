@@ -157,11 +157,7 @@ fn spawn_http_server(
             .header("Access-Control-Expose-Headers", "*")
             .header("Access-Control-Expose-Methods", "GET")
             .header("Cache-Control", "public, max-age=1209600")
-            .header("Timing-Allow-Origin", "*")
-            .header(
-                "X-Robots-Tag",
-                "noindex, noarchive, nosnippet, noimageindex",
-            );
+            .header("Timing-Allow-Origin", "*");
         // include Advertisement headers if enabled in configuration
         if ad_headers {
             default_headers = default_headers

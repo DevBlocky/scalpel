@@ -111,6 +111,13 @@ async fn prom_service(gs: web::Data<Arc<GlobalState>>) -> HttpResponse {
     }
 }
 
+/// Default endpoint (404)
+fn not_found_service(req: HttpRequest, gs: web::Data<Arc<GlobalState>>) -> HttpResponse {
+    log::warn!("request for invalid path: {}", req.path());
+    gs.metrics.dropped_requests_total.inc();
+    HttpResponse::NotFound().body("no valid route found")
+}
+
 /// Represents an error the HTTP error can cause where there is some io error binding to the port
 /// specified in the client configuration
 #[derive(Debug)]
@@ -148,6 +155,7 @@ fn spawn_http_server(
             .header("X-Content-Type-Options", "nosniff")
             .header("Access-Control-Allow-Origin", "*")
             .header("Access-Control-Expose-Headers", "*")
+            .header("Access-Control-Expose-Methods", "GET")
             .header("Cache-Control", "public, max-age=1209600")
             .header("Timing-Allow-Origin", "*")
             .header(
@@ -180,9 +188,7 @@ fn spawn_http_server(
             )
             // Prom metrics route
             .route("/prometheus", web::get().to(prom_service))
-            .default_service(
-                web::route().to(|| HttpResponse::NotFound().body("no valid route found")),
-            )
+            .default_service(web::route().to(not_found_service))
     })
     .keep_alive(gs.config.keep_alive)
     .shutdown_timeout(60)
@@ -324,10 +330,9 @@ impl HttpServerLifecycle {
         builder.set_private_key(PKey::from_rsa(priv_key)?.as_ref())?;
         builder.check_private_key()?;
 
-        // enable TLSv1 and TLSv1.1 if we're not enforcing secure TLS versions
+        // manually revert to the mozilla_old TLS standard if we're not enforcing secure TLS
+        // https://wiki.mozilla.org/Security/Server_Side_TLS
         if !gs.config.enforce_secure_tls {
-            // use the mozilla old standard for ciphersuites
-            // by default, this is the mozilla intermediate standard which won't work with TLSv1(.1)
             builder.set_cipher_list(
                 "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:\
                 ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:\

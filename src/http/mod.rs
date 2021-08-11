@@ -312,13 +312,12 @@ impl HttpServerLifecycle {
         let mut builder = ssl::SslAcceptor::mozilla_intermediate_v5(ssl::SslMethod::tls_server())?;
 
         // push the full-chain certificate into the SslAcceptorBuilder
-        let full_chain = X509::stack_from_pem(cert.certificate.as_bytes())?;
-        let mut full_chain_iter = full_chain.iter();
-        if let Some(x509) = full_chain_iter.next() {
-            builder.set_certificate(x509.as_ref())?;
+        let mut full_chain = X509::stack_from_pem(cert.certificate.as_bytes())?.into_iter();
+        if let Some(x509) = full_chain.next() {
+            builder.set_certificate(&x509)?;
         }
-        for next_chain in full_chain_iter {
-            builder.add_extra_chain_cert(next_chain.clone())?;
+        for x509 in full_chain {
+            builder.add_extra_chain_cert(x509)?;
         }
 
         // push the private key to the SslAcceptorBuilder

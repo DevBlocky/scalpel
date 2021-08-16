@@ -1,5 +1,4 @@
 use arc_swap::ArcSwap;
-use env_logger::Env;
 use std::sync::{atomic, Arc};
 use std::time;
 
@@ -13,6 +12,8 @@ mod utils;
 
 use backend::Backend;
 pub use utils::constants;
+
+static KILL_FLAG: atomic::AtomicBool = atomic::AtomicBool::new(false);
 
 /// Structure that holds thread-safe data that should be accessible throughout most of the
 /// application. This is created by the Application below and passed throughout the Application as
@@ -28,7 +29,6 @@ pub struct GlobalState {
 
 /// Structure dedciated to holding MD@Home Rust lifetime logic
 struct Application {
-    should_run: Arc<atomic::AtomicBool>,
     gs: Arc<GlobalState>,
 }
 
@@ -95,20 +95,7 @@ impl Application {
             })
         };
 
-        Self {
-            should_run: Arc::new(atomic::AtomicBool::new(true)),
-            gs,
-        }
-    }
-
-    /// Registers a SIGINT/SIGTERM signal handler that will toggle an internal bool that signals we
-    /// should start cleaning up and gracefully shutting down
-    fn register_stop_signal(&self) -> Result<(), ctrlc::Error> {
-        let should_run = Arc::clone(&self.should_run);
-        ctrlc::set_handler(move || {
-            log::info!("stop signal received, beginning shutdown process");
-            should_run.store(false, atomic::Ordering::SeqCst);
-        })
+        Self { gs }
     }
 
     /// Pings the backend server (reporting any errors that occur), then returns the ssl
@@ -170,10 +157,6 @@ impl Application {
     /// - Shrinking the cache when it's oversized
     /// - Calls function to instigate graceful shutdown when CTRL+C is pressed
     async fn run(&mut self) {
-        // initialize thread for CTRL+C / stop signals
-        self.register_stop_signal()
-            .expect("cannot register ctrl+c handler");
-
         // perform initial ping to backend to get HTTP certificate
         // if API is trustworthy, then second "expect" should never panic
         let mut crt = self
@@ -200,7 +183,7 @@ impl Application {
         let mut last_shrink = time::Instant::now() - time::Duration::from_secs(600);
 
         // run until we should begin shutdown sequence
-        while self.should_run.load(atomic::Ordering::SeqCst) {
+        while !KILL_FLAG.load(atomic::Ordering::SeqCst) {
             interval.tick().await;
 
             // re-ping server every minute
@@ -274,7 +257,7 @@ impl Application {
 
         if let Some(srv) = server {
             log::info!("shutting down actix web server");
-            srv.shutdown(false).await;
+            srv.shutdown(true).await;
         }
     }
 }
@@ -303,8 +286,15 @@ async fn init() {
 }
 
 fn main() {
+    use env_logger::Env;
+
     // init the logger with INFO level
     env_logger::Builder::from_env(Env::default().default_filter_or("INFO")).init();
+
+    ctrlc::set_handler(|| {
+        log::warn!("stop signal received, setting kill flag");
+        KILL_FLAG.store(true, atomic::Ordering::SeqCst);
+    }).expect("ctrlc::set_handler");
 
     let max_bt: usize = std::env::var("TOKIO_MAX_BLOCKING_THREADS")
         .unwrap_or_else(|_| "512".to_string())

@@ -1,4 +1,4 @@
-FROM debian:latest AS build-stage
+FROM debian:buster AS build-stage
 WORKDIR /build
 
 # install required packages
@@ -35,7 +35,7 @@ RUN dos2unix docker-entrypoint.sh
 
 
 # copy stuff from build stage
-FROM debian:latest
+FROM debian:buster
 WORKDIR /mangahome
 
 # needed for SSL to work right
@@ -46,5 +46,5 @@ COPY --from=build-stage /build/docker-entrypoint.sh ./
 RUN chmod +x scalpel docker-entrypoint.sh
 
 STOPSIGNAL SIGTERM
-ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["./scalpel"]
+ENTRYPOINT "./docker-entrypoint.sh"
+CMD "./scalpel"

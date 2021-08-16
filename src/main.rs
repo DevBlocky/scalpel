@@ -294,7 +294,8 @@ fn main() {
     ctrlc::set_handler(|| {
         log::warn!("stop signal received, setting kill flag");
         KILL_FLAG.store(true, atomic::Ordering::SeqCst);
-    }).expect("ctrlc::set_handler");
+    })
+    .expect("ctrlc::set_handler");
 
     let max_bt: usize = std::env::var("TOKIO_MAX_BLOCKING_THREADS")
         .unwrap_or_else(|_| "512".to_string())

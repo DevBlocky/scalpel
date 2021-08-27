@@ -22,7 +22,7 @@ serde = {version = "1.0.127", features = ["derive"]}
 prometheus = {version = "0.12.0", features = ["process"]}
 openssl = {version = "0.10.36", features = ["v110"]}
 serde_json = "1.0.66"
-serde_yaml = "0.8.17"
+serde_yaml = "0.8.20"
 sodiumoxide = "0.2.7"
 env_logger = "0.9.0"
 log = "0.4.14"

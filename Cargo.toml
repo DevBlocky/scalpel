@@ -17,7 +17,7 @@ ce-filesystem = ["forceps"]
 [dependencies]
 ctrlc = {version = "3.2.0", features = ["termination"]}
 reqwest = {version = "0.11.2", features = ["json", "stream"]}
-bytes = {version = "1.0.1", features = ["serde"]}
+bytes = {version = "1.1.0", features = ["serde"]}
 serde = {version = "1.0.129", features = ["derive"]}
 prometheus = {version = "0.12.0", features = ["process"]}
 openssl = {version = "0.10.36", features = ["v110"]}

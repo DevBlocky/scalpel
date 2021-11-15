@@ -21,7 +21,7 @@ bytes = {version = "1.1.0", features = ["serde"]}
 serde = {version = "1.0.130", features = ["derive"]}
 prometheus = {version = "0.12.0", features = ["process"]}
 openssl = {version = "0.10.36", features = ["v110"]}
-serde_json = "1.0.67"
+serde_json = "1.0.70"
 serde_yaml = "0.8.20"
 sodiumoxide = "0.2.7"
 env_logger = "0.9.0"

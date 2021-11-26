@@ -15,14 +15,14 @@ ce-rocksdb = ["rocksdb"]
 ce-filesystem = ["forceps"]
 
 [dependencies]
-ctrlc = {version = "3.2.0", features = ["termination"]}
+ctrlc = {version = "3.2.1", features = ["termination"]}
 reqwest = {version = "0.11.2", features = ["json", "stream"]}
 bytes = {version = "1.1.0", features = ["serde"]}
 serde = {version = "1.0.130", features = ["derive"]}
-prometheus = {version = "0.12.0", features = ["process"]}
+prometheus = {version = "0.13.0", features = ["process"]}
 openssl = {version = "0.10.36", features = ["v110"]}
 serde_json = "1.0.67"
-serde_yaml = "0.8.20"
+serde_yaml = "0.8.21"
 sodiumoxide = "0.2.7"
 env_logger = "0.9.0"
 log = "0.4.14"

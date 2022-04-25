@@ -15,7 +15,7 @@ ce-rocksdb = ["rocksdb"]
 ce-filesystem = ["forceps"]
 
 [dependencies]
-ctrlc = {version = "3.2.0", features = ["termination"]}
+ctrlc = {version = "3.2.2", features = ["termination"]}
 reqwest = {version = "0.11.2", features = ["json", "stream"]}
 bytes = {version = "1.1.0", features = ["serde"]}
 serde = {version = "1.0.130", features = ["derive"]}
